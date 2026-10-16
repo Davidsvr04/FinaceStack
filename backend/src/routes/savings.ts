@@ -8,6 +8,8 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(80),
   target_amount: money,
   deadline: isoDate.nullable().optional(),
+  // Ahorro que ya existía antes de la app: suma a la meta sin salir de una cuenta.
+  initial_amount: z.coerce.number().nonnegative().multipleOf(0.01).optional(),
 })
 
 // Positivo = abono (sale de account_id), negativo = retiro (entra a account_id).
@@ -62,6 +64,10 @@ router.patch('/:id', async (req, res) => {
     .select()
     .single()
 
+  // Bajar el ahorro previo puede dejar la meta en negativo si ya hubo retiros.
+  if (error?.code === '23514') {
+    throw new HttpError(400, 'El ahorro previo no puede quedar por debajo de lo que ya retiraste de la meta')
+  }
   if (error) throw dbError(error)
   res.json(data)
 })
@@ -70,15 +76,20 @@ router.delete('/:id', async (req, res) => {
   const { supabase } = getCtx(req)
   const { id } = parse(uuidParam, req.params)
 
-  // El dinero de la meta salió de una cuenta: hay que devolverlo antes de borrarla.
+  // Lo abonado desde cuentas hay que devolverlo antes de borrar la meta, o se
+  // perdería. El ahorro previo no salió de ninguna cuenta y puede descartarse.
   const { data: goal, error: findError } = await supabase
     .from('savings_goals')
-    .select('current_amount')
+    .select('current_amount, initial_amount')
     .eq('id', id)
     .single()
   if (findError) throw dbError(findError)
-  if (Number(goal.current_amount) > 0) {
-    throw new HttpError(409, 'La meta aún tiene dinero ahorrado; retíralo a una cuenta antes de eliminarla')
+  const fromAccounts = Number(goal.current_amount) - Number(goal.initial_amount)
+  if (fromAccounts > 0) {
+    throw new HttpError(
+      409,
+      'La meta tiene dinero abonado desde tus cuentas; retíralo a una cuenta antes de eliminarla',
+    )
   }
 
   const { error, count } = await supabase
