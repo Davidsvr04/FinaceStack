@@ -70,7 +70,10 @@ export interface SavingsGoal {
   id: string
   name: string
   target_amount: number
+  /** Incluye initial_amount + abonos - retiros. */
   current_amount: number
+  /** Ahorro previo a la app: no salió de ninguna cuenta. */
+  initial_amount: number
   deadline: string | null
   progress: number
   created_at: string
@@ -104,14 +107,39 @@ export interface DashboardSummary {
   expense: number
   net: number
   available_balance: number
-  /** Apartado en metas de ahorro; ya descontado de available_balance. */
+  /** En metas de ahorro (abonos + ahorro previo); no está en available_balance. */
   total_saved: number
+  total_savings_target: number
+  /** Abonos menos retiros del mes. */
+  saved_this_month: number
+  /** saved_this_month / income; null sin ingresos. */
+  savings_rate: number | null
   total_debt: number
+  /** available_balance + total_saved - total_debt. */
+  net_worth: number
   debt_to_income: number | null
   credit_utilization: number | null
   expenses_by_category: { category: string; amount: number }[]
-  trend: { month: string; income: number; expense: number }[]
+  trend: TrendPoint[]
+  savings_goals: GoalSummary[]
   recent_transactions: RecentTransaction[]
+}
+
+export interface TrendPoint {
+  month: string
+  income: number
+  expense: number
+  /** Ahorro neto del mes (puede ser negativo si hubo más retiros). */
+  saved: number
+}
+
+export interface GoalSummary {
+  id: string
+  name: string
+  target_amount: number
+  current_amount: number
+  deadline: string | null
+  progress: number
 }
 
 export interface AdminMetrics {

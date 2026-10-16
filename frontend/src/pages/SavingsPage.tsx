@@ -19,7 +19,7 @@ import {
 import { useApi } from '../hooks/useApi'
 import { useSubmit } from '../hooks/useSubmit'
 import { send } from '../lib/api'
-import { daysUntil, formatCurrency, formatDate, formatPercent, todayISO } from '../lib/format'
+import { daysUntil, formatCurrency, formatDate, formatPercent, optionalNumber, todayISO } from '../lib/format'
 import type { Account, SavingsGoal } from '../types'
 
 type Dialog =
@@ -35,7 +35,12 @@ export function SavingsPage() {
   const del = useSubmit()
 
   function handleDelete(goal: SavingsGoal) {
-    if (!window.confirm(`¿Eliminar la meta "${goal.name}"?`)) return
+    const fromAccounts = Number(goal.current_amount) - Number(goal.initial_amount)
+    const warning =
+      fromAccounts <= 0 && Number(goal.current_amount) > 0
+        ? ` Se descartarán ${formatCurrency(Number(goal.current_amount))} de ahorro previo.`
+        : ''
+    if (!window.confirm(`¿Eliminar la meta "${goal.name}"?${warning}`)) return
     void del.run(async () => {
       await send('DELETE', `/savings-goals/${goal.id}`)
       reload()
@@ -156,6 +161,11 @@ function GoalCard({ goal, onDeposit, onWithdraw, onEdit, onDelete }: GoalCardPro
             </>
           )}
         </p>
+        {Number(goal.initial_amount) > 0 && (
+          <p className="mt-1 text-xs text-ink-muted">
+            Incluye {formatCurrency(Number(goal.initial_amount))} de ahorro previo
+          </p>
+        )}
       </div>
 
       <div className="mt-auto flex gap-2">
@@ -176,11 +186,17 @@ function GoalFormModal({ goal, onClose, onSaved }: { goal?: SavingsGoal; onClose
   const [name, setName] = useState(goal?.name ?? '')
   const [target, setTarget] = useState(goal ? String(goal.target_amount) : '')
   const [deadline, setDeadline] = useState(goal?.deadline ?? '')
+  const [initial, setInitial] = useState(goal && Number(goal.initial_amount) > 0 ? String(goal.initial_amount) : '')
   const { run, submitting, error } = useSubmit()
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    const body = { name, target_amount: Number(target), deadline: deadline || null }
+    const body = {
+      name,
+      target_amount: Number(target),
+      deadline: deadline || null,
+      initial_amount: optionalNumber(initial) ?? 0,
+    }
     void run(async () => {
       if (goal) await send('PATCH', `/savings-goals/${goal.id}`, body)
       else await send('POST', '/savings-goals', body)
@@ -216,6 +232,21 @@ function GoalFormModal({ goal, onClose, onSaved }: { goal?: SavingsGoal; onClose
         </Field>
         <Field label="Fecha límite (opcional)">
           <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={inputClass} />
+        </Field>
+        <Field
+          label="Ahorro previo (opcional)"
+          hint="Lo que ya tenías ahorrado antes de usar la app. Suma a la meta sin descontarse de ninguna cuenta ni aparecer en Movimientos. Si ese dinero está incluido en el saldo de una cuenta que registraste, déjalo en 0 y usa «Abonar» desde esa cuenta para no contarlo dos veces."
+        >
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            inputMode="decimal"
+            value={initial}
+            onChange={(e) => setInitial(e.target.value)}
+            placeholder="0"
+            className={inputClass}
+          />
         </Field>
         <FormError message={error} />
         <ModalActions>
