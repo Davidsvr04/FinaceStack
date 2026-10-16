@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { nextDayOfMonth, round2, simulatePayoff } from '../lib/finance.js'
+import { cardStatement, round2, simulatePayoff } from '../lib/finance.js'
 import { dbError, getCtx, isoDate, money, parse, uuidParam } from '../lib/http.js'
 
 // Las tarjetas se crean/editan/borran por /api/accounts con type=credit_card.
@@ -20,27 +20,59 @@ const simulateSchema = z.object({
   monthly_interest_rate: z.coerce.number().nonnegative().max(1).optional(),
 })
 
+// El cliente envía su fecha local: en el servidor (UTC) puede ser otro día.
+const listSchema = z.object({ today: isoDate.optional() })
+
 router.get('/', async (req, res) => {
   const { supabase } = getCtx(req)
-  const { data, error } = await supabase
+  const today = parse(listSchema, req.query).today ?? new Date().toISOString().slice(0, 10)
+
+  const { data: cards, error } = await supabase
     .from('accounts')
     .select('*')
     .eq('type', 'credit_card')
     .order('created_at')
-
   if (error) throw dbError(error)
 
+  // Movimientos de todas las tarjetas, para reconstruir la deuda al último corte.
+  const { data: txs, error: txError } = cards.length
+    ? await supabase
+        .from('transactions')
+        .select('account_id, type, amount, date, installments')
+        .in('account_id', cards.map((card) => card.id))
+    : { data: [], error: null }
+  if (txError) throw dbError(txError)
+
   res.json(
-    data.map((card) => {
+    cards.map((card) => {
       const debt = Math.max(0, -Number(card.balance))
       const limit = card.credit_limit === null ? null : Number(card.credit_limit)
+      const statement = cardStatement({
+        debt: -Number(card.balance),
+        cutOffDay: card.cut_off_day,
+        paymentDueDay: card.payment_due_day,
+        createdOn: String(card.created_at).slice(0, 10),
+        opening: {
+          billed: Number(card.opening_billed_debt ?? 0),
+          nextCharge: card.opening_next_charge == null ? null : Number(card.opening_next_charge),
+          laterInstallments: Number(card.opening_later_installments ?? 1),
+        },
+        // En la tarjeta, un gasto aumenta la deuda y un ingreso (pago) la reduce.
+        movements: txs
+          .filter((tx) => tx.account_id === card.id)
+          .map((tx) => ({
+            date: tx.date,
+            delta: tx.type === 'expense' ? Number(tx.amount) : -Number(tx.amount),
+            installments: Number(tx.installments ?? 1),
+          })),
+        today,
+      })
       return {
         ...card,
         debt: round2(debt),
         available_credit: limit === null ? null : round2(Math.max(0, limit - debt)),
         utilization: limit ? round2(debt / limit) : null,
-        next_cut_off_date: card.cut_off_day ? nextDayOfMonth(card.cut_off_day) : null,
-        next_payment_date: card.payment_due_day ? nextDayOfMonth(card.payment_due_day) : null,
+        ...statement,
       }
     }),
   )

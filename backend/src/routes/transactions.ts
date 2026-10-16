@@ -16,6 +16,8 @@ const createSchema = z.object({
   amount: money,
   date: isoDate.optional(),
   description: z.string().trim().max(255).nullable().optional(),
+  // Solo gastos con tarjeta de crédito (lo valida la base de datos).
+  installments: z.coerce.number().int().min(1).max(48).optional(),
 })
 
 const listSchema = z.object({

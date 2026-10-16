@@ -9,6 +9,11 @@ const creditCardFields = {
   cut_off_day: z.coerce.number().int().min(1).max(31).optional(),
   payment_due_day: z.coerce.number().int().min(1).max(31).optional(),
   monthly_interest_rate: z.coerce.number().nonnegative().max(1).optional(),
+  // Plan de la deuda inicial: ya facturado, cuánto se cobra en el próximo
+  // extracto (null = todo) y en cuántos meses se cobra el resto.
+  opening_billed_debt: z.coerce.number().nonnegative().multipleOf(0.01).optional(),
+  opening_next_charge: z.coerce.number().nonnegative().multipleOf(0.01).nullable().optional(),
+  opening_later_installments: z.coerce.number().int().min(1).max(48).optional(),
 }
 
 const createSchema = z.object({
@@ -44,6 +49,9 @@ router.post('/', async (req, res) => {
   )
   if (!isCard && hasCardFields) {
     throw new HttpError(400, 'Los campos de tarjeta solo aplican a cuentas tipo credit_card')
+  }
+  if ((input.opening_billed_debt ?? 0) + (input.opening_next_charge ?? 0) > Math.abs(initial_balance)) {
+    throw new HttpError(400, 'Lo facturado más lo del próximo extracto no puede superar la deuda actual')
   }
 
   const { data, error } = await supabase
