@@ -8,6 +8,7 @@ interface MovementLike {
   category: { name: string } | null
   savings_goal: { name: string } | null
   counterpart_account?: { name: string } | null
+  installments?: number
 }
 
 export interface MovementDisplay {
@@ -44,10 +45,11 @@ export function describeMovement(tx: MovementLike): MovementDisplay {
     }
   }
 
+  const installments = tx.installments && tx.installments > 1 ? ` · ${tx.installments} cuotas` : ''
   return {
     icon: isOut ? ArrowUpRight : ArrowDownLeft,
     title: tx.description || tx.category?.name || (isOut ? 'Gasto' : 'Ingreso'),
-    detail: tx.category ? `${account} · ${tx.category.name}` : account,
+    detail: (tx.category ? `${account} · ${tx.category.name}` : account) + installments,
     tag: null,
   }
 }

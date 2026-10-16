@@ -2,7 +2,8 @@ import { Plus } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useSubmit } from '../../hooks/useSubmit'
 import { send } from '../../lib/api'
-import { todayISO } from '../../lib/format'
+import { formatCurrency, formatPercent, todayISO } from '../../lib/format'
+import { INSTALLMENT_OPTIONS } from '../../lib/labels'
 import type { Account, Category, Transaction, TransactionType } from '../../types'
 import { Button, Field, FormError, inputClass, Modal, ModalActions } from '../ui'
 
@@ -29,12 +30,19 @@ export function TransactionFormModal({
   const [categoryId, setCategoryId] = useState(transaction?.category_id ?? '')
   const [date, setDate] = useState(transaction?.date ?? todayISO())
   const [description, setDescription] = useState(transaction?.description ?? '')
+  const [installments, setInstallments] = useState(transaction?.installments ?? 1)
   const [newCategory, setNewCategory] = useState<string | null>(null)
   const save = useSubmit()
   const remove = useSubmit()
   const createCategory = useSubmit()
 
   const visibleCategories = categories.filter((c) => c.type === type)
+  const account = accounts.find((a) => a.id === accountId)
+  // Las cuotas solo aplican a gastos con tarjeta de crédito.
+  const canSplit = type === 'expense' && account?.type === 'credit_card'
+  const effectiveInstallments = canSplit ? installments : 1
+  const amountValue = Number(amount) || 0
+  const monthlyRate = Number(account?.monthly_interest_rate ?? 0)
 
   function changeType(next: TransactionType) {
     setType(next)
@@ -51,6 +59,7 @@ export function TransactionFormModal({
       category_id: categoryId || null,
       date,
       description: description.trim() || null,
+      installments: effectiveInstallments,
     }
     void save.run(async () => {
       if (transaction) await send('PATCH', `/transactions/${transaction.id}`, body)
@@ -121,6 +130,32 @@ export function TransactionFormModal({
             ))}
           </select>
         </Field>
+
+        {canSplit && (
+          <div className="space-y-1">
+            <Field label="Cuotas">
+              <select
+                value={installments}
+                onChange={(e) => setInstallments(Number(e.target.value))}
+                className={inputClass}
+              >
+                {INSTALLMENT_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n === 1 ? '1 cuota (de contado)' : `${n} cuotas`}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {installments > 1 && amountValue > 0 && (
+              <p className="text-xs text-ink-secondary">
+                {installments} cuotas de {formatCurrency(amountValue / installments)}, una en cada corte desde el
+                próximo.
+                {monthlyRate > 0 &&
+                  ` Más intereses: a ${formatPercent(monthlyRate, 2)} mensual, unos ${formatCurrency(amountValue * monthlyRate)} en la primera cuota (cada banco liquida distinto).`}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="space-y-1">
           <Field label="Categoría">

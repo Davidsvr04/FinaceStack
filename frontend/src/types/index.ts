@@ -21,15 +21,40 @@ export interface Account {
   payment_due_day: number | null
   /** Fracción mensual: 0.0215 = 2.15 %. */
   monthly_interest_rate: number | null
+  /** Tarjetas, plan de la deuda inicial: ya facturado al registrarla. */
+  opening_billed_debt: number
+  /** Del resto, cuánto se cobra en el próximo extracto (null = todo). */
+  opening_next_charge: number | null
+  /** En cuántos meses se cobra lo que queda. */
+  opening_later_installments: number
   created_at: string
+}
+
+export interface UpcomingStatement {
+  cut_off_date: string
+  payment_date: string | null
+  amount: number
 }
 
 export interface CreditCard extends Account {
   debt: number
   available_credit: number | null
   utilization: number | null
+  /** Deuda que había al registrar la tarjeta. */
+  opening_debt: number
+  /** Facturado en cortes cerrados y sin pagar. */
+  billed: number
+  /** Cuotas que se facturarán en cortes futuros. */
+  unbilled: number
+  last_cut_off_date: string | null
   next_cut_off_date: string | null
-  next_payment_date: string | null
+  /**
+   * Pago mínimo. due: facturado con fecha límite futura; overdue: ya venció;
+   * estimated: lo que se facturará en el próximo corte.
+   */
+  next_payment: { date: string; amount: number; status: 'due' | 'overdue' | 'estimated' } | null
+  /** Cobros por corte a partir del próximo. */
+  upcoming_statements: UpcomingStatement[]
 }
 
 export interface Category {
@@ -51,6 +76,8 @@ export interface Transaction {
   /** No nulo = transferencia (pago a tarjeta o ahorro): no es ingreso ni gasto. */
   transfer_id: string | null
   savings_goal_id: string | null
+  /** Compras con tarjeta: número de cuotas (1 = de contado). */
+  installments: number
   account: { id: string; name: string; type: AccountType } | null
   category: { id: string; name: string; type: TransactionType } | null
   savings_goal: { id: string; name: string } | null
