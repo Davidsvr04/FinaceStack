@@ -4,11 +4,12 @@ import { DebtMeter } from '../components/dashboard/DebtMeter'
 import { ExpensesByCategoryChart } from '../components/dashboard/ExpensesByCategoryChart'
 import { IncomeVsExpenseChart } from '../components/dashboard/IncomeVsExpenseChart'
 import { RecentTransactions } from '../components/dashboard/RecentTransactions'
+import { SavingsGoalsSummary } from '../components/dashboard/SavingsGoalsSummary'
 import { StatCard } from '../components/dashboard/StatCard'
 import { Spinner } from '../components/Spinner'
 import { useAuth } from '../context/AuthContext'
 import { useApi } from '../hooks/useApi'
-import { currentMonth, formatCurrency, formatMonth } from '../lib/format'
+import { currentMonth, formatCurrency, formatMonth, formatPercent } from '../lib/format'
 import type { DashboardSummary } from '../types'
 
 export function DashboardPage() {
@@ -72,27 +73,62 @@ export function DashboardPage() {
 
       {data && (
         <div className={`space-y-6 transition-opacity ${loading ? 'opacity-60' : ''}`}>
-          <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard label="Ingresos del mes" value={formatCurrency(data.income)} />
-            <StatCard
-              label="Gastos del mes"
-              value={formatCurrency(data.expense)}
-              hint={`Balance del mes: ${formatCurrency(data.net)}`}
-            />
-            <StatCard
-              label="Saldo disponible"
-              value={formatCurrency(data.available_balance)}
-              hint={
-                data.total_saved > 0
-                  ? `Bancos y efectivo · ${formatCurrency(data.total_saved)} apartados en ahorros`
-                  : 'Cuentas bancarias y efectivo'
-              }
-            />
-            <DebtMeter ratio={data.debt_to_income} totalDebt={data.total_debt} />
+          {/* Flujo del mes seleccionado */}
+          <section aria-labelledby="kpi-month" className="space-y-2">
+            <h2 id="kpi-month" className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+              Este mes
+            </h2>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <StatCard label="Ingresos" value={formatCurrency(data.income)} />
+              <StatCard
+                label="Gastos"
+                value={formatCurrency(data.expense)}
+                hint={`Balance: ${formatCurrency(data.net)}`}
+              />
+              <StatCard
+                label="Ahorrado"
+                value={formatCurrency(data.saved_this_month)}
+                hint={
+                  data.savings_rate !== null
+                    ? `${formatPercent(data.savings_rate)} de tus ingresos`
+                    : 'Abonos menos retiros a metas'
+                }
+              />
+              <DebtMeter ratio={data.debt_to_income} totalDebt={data.total_debt} />
+            </div>
+          </section>
+
+          {/* Posición actual (no depende del mes) */}
+          <section aria-labelledby="kpi-position" className="space-y-2">
+            <h2 id="kpi-position" className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+              Tu posición hoy
+            </h2>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <StatCard
+                label="Saldo disponible"
+                value={formatCurrency(data.available_balance)}
+                hint="Bancos y efectivo, sin ahorros"
+              />
+              <StatCard
+                label="Ahorros"
+                value={formatCurrency(data.total_saved)}
+                hint={
+                  data.total_savings_target > 0
+                    ? `${formatPercent(Math.min(1, data.total_saved / data.total_savings_target))} de ${formatCurrency(data.total_savings_target)} en metas`
+                    : 'Sin metas activas'
+                }
+              />
+              <StatCard label="Deuda en tarjetas" value={formatCurrency(data.total_debt)} />
+              <StatCard
+                label="Patrimonio neto"
+                value={formatCurrency(data.net_worth)}
+                hint="Disponible + ahorros − deudas"
+              />
+            </div>
           </section>
 
           <section className="grid gap-4 lg:grid-cols-5">
-            <Panel title="Ingresos vs gastos" subtitle="Últimos 6 meses" className="lg:col-span-3">
+            <Panel title="Ingresos, gastos y ahorro" subtitle="Últimos 6 meses" className="lg:col-span-3">
               <IncomeVsExpenseChart data={data.trend} />
             </Panel>
             <Panel title="Gastos por categoría" subtitle="Mes seleccionado" className="lg:col-span-2">
@@ -100,9 +136,14 @@ export function DashboardPage() {
             </Panel>
           </section>
 
-          <Panel title="Últimos movimientos">
-            <RecentTransactions items={data.recent_transactions} />
-          </Panel>
+          <section className="grid gap-4 lg:grid-cols-5">
+            <Panel title="Últimos movimientos" className="lg:col-span-3">
+              <RecentTransactions items={data.recent_transactions} />
+            </Panel>
+            <Panel title="Metas de ahorro" className="lg:col-span-2">
+              <SavingsGoalsSummary goals={data.savings_goals} />
+            </Panel>
+          </section>
         </div>
       )}
     </div>
@@ -114,7 +155,8 @@ function isEmpty(data: DashboardSummary): boolean {
   return (
     data.recent_transactions.length === 0 &&
     data.available_balance === 0 &&
-    data.total_debt === 0
+    data.total_debt === 0 &&
+    data.total_saved === 0
   )
 }
 

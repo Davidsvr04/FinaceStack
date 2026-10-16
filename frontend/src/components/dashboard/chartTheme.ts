@@ -3,6 +3,7 @@
 export const SERIES = {
   income: '#2a78d6', // slot 1 - azul
   expense: '#eb6834', // slot 2 - naranja
+  saved: '#1baf7a', // slot 3 - aqua (contraste < 3:1: el gráfico ofrece tabla)
 } as const
 
 // Gastos por categoría: magnitud de una sola serie -> un solo tono.
