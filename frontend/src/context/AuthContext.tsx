@@ -83,10 +83,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signUp(email, password, fullName) {
         // full_name lo recoge el trigger handle_new_user para crear el perfil.
+        // emailRedirectTo lleva el enlace del correo al sitio desde el que se
+        // registró; debe estar en Redirect URLs de Supabase o se usa el Site URL.
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { full_name: fullName } },
+          options: { data: { full_name: fullName }, emailRedirectTo: window.location.origin },
         })
         if (error) throw error
       },
