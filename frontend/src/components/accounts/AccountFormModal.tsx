@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { useSubmit } from '../../hooks/useSubmit'
 import { send } from '../../lib/api'
-import { optionalNumber } from '../../lib/format'
-import { ACCOUNT_TYPES } from '../../lib/labels'
-import type { Account, AccountType } from '../../types'
+import { formatCurrency, optionalNumber } from '../../lib/format'
+import { ACCOUNT_TYPES, INSTALLMENT_OPTIONS } from '../../lib/labels'
+import type { Account, AccountType, CreditCard } from '../../types'
 import { Button, Field, FormError, inputClass, Modal, ModalActions } from '../ui'
 
 interface Props {
@@ -26,12 +26,27 @@ export function AccountFormModal({ account, defaultType = 'bank', lockType = fal
   const [creditLimit, setCreditLimit] = useState(str(account?.credit_limit))
   const [cutOffDay, setCutOffDay] = useState(str(account?.cut_off_day))
   const [paymentDueDay, setPaymentDueDay] = useState(str(account?.payment_due_day))
+  const [openingBilled, setOpeningBilled] = useState(
+    account && Number(account.opening_billed_debt) > 0 ? String(account.opening_billed_debt) : '',
+  )
+  const [openingNext, setOpeningNext] = useState(str(account?.opening_next_charge))
+  const [openingLater, setOpeningLater] = useState(account?.opening_later_installments ?? 1)
   const [ratePct, setRatePct] = useState(
     account?.monthly_interest_rate == null ? '' : String(+(account.monthly_interest_rate * 100).toFixed(4)),
   )
   const { run, submitting, error } = useSubmit()
 
   const isCard = type === 'credit_card'
+  // Deuda que había al registrar la tarjeta: la que se escribe al crearla o,
+  // al editar desde Tarjetas, la que reconstruye el backend.
+  const openingDebt = isEdit
+    ? account && 'opening_debt' in account
+      ? Number((account as CreditCard).opening_debt)
+      : 0
+    : Math.abs(optionalNumber(initialBalance) ?? 0)
+  const nextCharge = optionalNumber(openingNext)
+  const remainder =
+    nextCharge === undefined ? 0 : Math.max(0, openingDebt - (optionalNumber(openingBilled) ?? 0) - nextCharge)
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -42,6 +57,11 @@ export function AccountFormModal({ account, defaultType = 'bank', lockType = fal
           cut_off_day: optionalNumber(cutOffDay),
           payment_due_day: optionalNumber(paymentDueDay),
           monthly_interest_rate: rate === undefined ? undefined : rate / 100,
+          ...(openingDebt > 0 && {
+            opening_billed_debt: optionalNumber(openingBilled) ?? 0,
+            opening_next_charge: nextCharge ?? null,
+            opening_later_installments: openingLater,
+          }),
         }
       : {}
 
@@ -109,6 +129,61 @@ export function AccountFormModal({ account, defaultType = 'bank', lockType = fal
               className={inputClass}
             />
           </Field>
+        )}
+
+        {isCard && openingDebt > 0 && (
+          <fieldset className="space-y-3 rounded-lg border border-hairline p-3">
+            <legend className="px-1 text-sm font-medium">
+              ¿Cómo te cobran {isEdit ? `la deuda inicial de ${formatCurrency(openingDebt)}` : 'esa deuda'}?
+            </legend>
+            <Field
+              label="Ya facturado y sin pagar"
+              hint="Si tu último extracto no está pagado, su valor. Se cobra en la próxima fecha de pago."
+            >
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                max={openingDebt}
+                inputMode="decimal"
+                value={openingBilled}
+                onChange={(e) => setOpeningBilled(e.target.value)}
+                placeholder="0"
+                className={inputClass}
+              />
+            </Field>
+            <Field
+              label="Se cobra en el próximo extracto"
+              hint="Normalmente tu pago mínimo del próximo corte. Vacío = todo lo que no está facturado."
+            >
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                max={Math.max(0, openingDebt - (optionalNumber(openingBilled) ?? 0))}
+                inputMode="decimal"
+                value={openingNext}
+                onChange={(e) => setOpeningNext(e.target.value)}
+                placeholder="Todo"
+                className={inputClass}
+              />
+            </Field>
+            {remainder > 0 && (
+              <Field label="El resto, ¿en cuántos meses?">
+                <select
+                  value={openingLater}
+                  onChange={(e) => setOpeningLater(Number(e.target.value))}
+                  className={inputClass}
+                >
+                  {INSTALLMENT_OPTIONS.map((n) => (
+                    <option key={n} value={n}>
+                      {n === 1 ? '1 mes' : `${n} meses`} · {formatCurrency(remainder / n)}/mes
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+          </fieldset>
         )}
 
         {isCard && (

@@ -1,4 +1,15 @@
-import { AlertTriangle, Calculator, CheckCircle2, OctagonAlert, Pencil, Plus, Trash2, type LucideIcon } from 'lucide-react'
+import {
+  AlertTriangle,
+  Calculator,
+  CalendarClock,
+  CheckCircle2,
+  Clock,
+  OctagonAlert,
+  Pencil,
+  Plus,
+  Trash2,
+  type LucideIcon,
+} from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { AccountFormModal } from '../components/accounts/AccountFormModal'
@@ -29,7 +40,8 @@ type Dialog =
   | { kind: 'edit' | 'pay' | 'simulate'; card: CreditCard }
 
 export function CardsPage() {
-  const { data: cards, error, loading, reload } = useApi<CreditCard[]>('/credit-cards')
+  // Se envía la fecha local para que los ciclos de corte no dependan de la zona del servidor.
+  const { data: cards, error, loading, reload } = useApi<CreditCard[]>(`/credit-cards?today=${todayISO()}`)
   const accountsQuery = useApi<Account[]>('/accounts')
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const del = useSubmit()
@@ -131,7 +143,6 @@ interface CardTileProps {
 
 function CardTile({ card, onPay, onSimulate, onEdit, onDelete }: CardTileProps) {
   const level = card.utilization === null ? null : utilizationLevel(card.utilization)
-  const paymentDays = card.next_payment_date ? daysUntil(card.next_payment_date) : null
 
   return (
     <Card className="flex flex-col gap-4">
@@ -169,23 +180,25 @@ function CardTile({ card, onPay, onSimulate, onEdit, onDelete }: CardTileProps) 
         )}
       </div>
 
-      <dl className="grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <dt className="text-xs text-ink-muted">Próximo corte</dt>
-          <dd className="font-medium">{card.next_cut_off_date ? formatDate(card.next_cut_off_date) : '—'}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-ink-muted">Fecha límite de pago</dt>
-          <dd className="font-medium">
-            {card.next_payment_date ? formatDate(card.next_payment_date) : '—'}
-            {paymentDays !== null && (
-              <span className="ml-1 text-xs font-normal text-ink-muted">
-                ({paymentDays === 0 ? 'hoy' : `en ${paymentDays} días`})
-              </span>
-            )}
-          </dd>
-        </div>
-      </dl>
+      {card.next_cut_off_date && (
+        <dl className="grid grid-cols-3 gap-3 text-sm">
+          <div>
+            <dt className="text-xs text-ink-muted">Facturado</dt>
+            <dd className="font-medium tabular-nums">{formatCurrency(card.billed)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-ink-muted">Por facturar</dt>
+            <dd className="font-medium tabular-nums">{formatCurrency(card.unbilled)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-ink-muted">Próximo corte</dt>
+            <dd className="font-medium">{formatDate(card.next_cut_off_date)}</dd>
+          </div>
+        </dl>
+      )}
+
+      <NextPayment card={card} />
+      <UpcomingStatements card={card} />
 
       <div className="mt-auto flex gap-2">
         <Button onClick={onPay} disabled={card.debt === 0} className="flex-1">
@@ -200,6 +213,89 @@ function CardTile({ card, onPay, onSimulate, onEdit, onDelete }: CardTileProps) 
   )
 }
 
+/** Próximo pago según el ciclo de facturación; el estado siempre lleva icono + texto. */
+function NextPayment({ card }: { card: CreditCard }) {
+  const payment = card.next_payment
+
+  if (!payment) {
+    return (
+      <p className="flex items-center gap-1.5 rounded-lg bg-ink/[0.03] px-3 py-2.5 text-sm text-ink-secondary">
+        <CheckCircle2 className="size-4 text-status-good" aria-hidden />
+        {card.debt > 0 ? 'Registra el día de pago para ver cuándo pagar' : 'Sin pagos pendientes'}
+      </p>
+    )
+  }
+
+  const days = daysUntil(payment.date)
+  const when = days === 0 ? 'hoy' : days === 1 ? 'mañana' : `en ${days} días`
+
+  const billingCut = card.upcoming_statements[0]?.cut_off_date ?? card.next_cut_off_date
+  const view = {
+    due: {
+      icon: CalendarClock,
+      color: days <= 3 ? 'var(--color-status-warning)' : 'var(--color-ink-secondary)',
+      title: `Pago mínimo antes del ${formatDate(payment.date)}`,
+      detail: `${when} · facturado en el corte del ${card.last_cut_off_date ? formatDate(card.last_cut_off_date) : '—'}`,
+    },
+    overdue: {
+      icon: OctagonAlert,
+      color: 'var(--color-status-critical)',
+      title: `Pago vencido el ${formatDate(payment.date)}`,
+      detail: 'Lo facturado en el último corte sigue sin pagarse por completo',
+    },
+    estimated: {
+      icon: Clock,
+      color: 'var(--color-ink-muted)',
+      title: `Pago mínimo: ${formatDate(payment.date)}`,
+      detail: billingCut ? `${when} · estimado, se factura en el corte del ${formatDate(billingCut)}` : `${when} · estimado`,
+    },
+  }[payment.status]
+
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg bg-ink/[0.03] px-3 py-2.5">
+      <view.icon className="mt-0.5 size-4 shrink-0" style={{ color: view.color }} aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{view.title}</p>
+        <p className="text-xs text-ink-muted">{view.detail}</p>
+      </div>
+      <p className="text-sm font-semibold tabular-nums">{formatCurrency(payment.amount)}</p>
+    </div>
+  )
+}
+
+/** Cobros de los próximos cortes (cuotas y deuda inicial repartida). */
+function UpcomingStatements({ card }: { card: CreditCard }) {
+  const rows = card.upcoming_statements
+  // Si solo hay un cobro y ya es el pago mínimo mostrado, no aporta nada nuevo.
+  if (rows.length === 0 || (rows.length === 1 && card.next_payment?.status === 'estimated')) return null
+
+  return (
+    <details className="text-sm">
+      <summary className="cursor-pointer text-xs font-medium text-ink-secondary hover:text-ink">
+        Próximos cobros ({rows.length} {rows.length === 1 ? 'corte' : 'cortes'})
+      </summary>
+      <table className="mt-2 w-full text-xs tabular-nums">
+        <thead className="text-ink-muted">
+          <tr className="border-b border-hairline">
+            <th className="py-1.5 text-left font-medium">Corte</th>
+            <th className="py-1.5 text-left font-medium">Pagar antes del</th>
+            <th className="py-1.5 text-right font-medium">Monto</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-hairline">
+          {rows.map((row) => (
+            <tr key={row.cut_off_date}>
+              <td className="py-1.5">{formatDate(row.cut_off_date)}</td>
+              <td className="py-1.5">{row.payment_date ? formatDate(row.payment_date) : '—'}</td>
+              <td className="py-1.5 text-right">{formatCurrency(row.amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+  )
+}
+
 interface PaymentModalProps {
   card: CreditCard
   sources: Account[]
@@ -209,7 +305,9 @@ interface PaymentModalProps {
 
 function PaymentModal({ card, sources, onClose, onSaved }: PaymentModalProps) {
   const [fromId, setFromId] = useState(sources[0]?.id ?? '')
-  const [amount, setAmount] = useState(String(card.debt))
+  // Por defecto, el pago mínimo (facturado pendiente o próximas cuotas).
+  const minimum = card.next_payment?.amount ?? card.debt
+  const [amount, setAmount] = useState(String(minimum))
   const [date, setDate] = useState(todayISO())
   const { run, submitting, error } = useSubmit()
 
@@ -245,7 +343,30 @@ function PaymentModal({ card, sources, onClose, onSaved }: PaymentModalProps) {
               ))}
             </select>
           </Field>
-          <Field label="Monto" hint={`Deuda actual: ${formatCurrency(card.debt)}`}>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Montos sugeridos">
+            {[
+              { label: 'Pago mínimo', value: minimum },
+              { label: 'Pago total', value: card.debt },
+            ].map((option) => (
+              <button
+                key={option.label}
+                type="button"
+                onClick={() => setAmount(String(option.value))}
+                aria-pressed={Number(amount) === option.value}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  Number(amount) === option.value
+                    ? 'border-brand bg-brand/10 text-brand-strong'
+                    : 'border-hairline text-ink-secondary hover:bg-ink/5'
+                }`}
+              >
+                {option.label} · {formatCurrency(option.value)}
+              </button>
+            ))}
+          </div>
+          <Field
+            label="Monto"
+            hint="Lo que pagues de más que el mínimo adelanta las cuotas de los próximos cortes."
+          >
             <input
               required
               type="number"
