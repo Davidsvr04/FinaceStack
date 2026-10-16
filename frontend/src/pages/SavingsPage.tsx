@@ -1,5 +1,6 @@
-import { CheckCircle2, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import { EmptyState } from '../components/EmptyState'
 import { Spinner } from '../components/Spinner'
 import {
@@ -18,8 +19,8 @@ import {
 import { useApi } from '../hooks/useApi'
 import { useSubmit } from '../hooks/useSubmit'
 import { send } from '../lib/api'
-import { daysUntil, formatCurrency, formatDate, formatPercent } from '../lib/format'
-import type { SavingsGoal } from '../types'
+import { daysUntil, formatCurrency, formatDate, formatPercent, todayISO } from '../lib/format'
+import type { Account, SavingsGoal } from '../types'
 
 type Dialog =
   | { kind: 'goal'; goal?: SavingsGoal }
@@ -27,6 +28,9 @@ type Dialog =
 
 export function SavingsPage() {
   const { data: goals, error, loading, reload } = useApi<SavingsGoal[]>('/savings-goals')
+  const accountsQuery = useApi<Account[]>('/accounts')
+  // Los ahorros salen de (o vuelven a) cuentas bancarias o de efectivo.
+  const sources = accountsQuery.data?.filter((a) => a.type !== 'credit_card') ?? []
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const del = useSubmit()
 
@@ -42,6 +46,7 @@ export function SavingsPage() {
   const saved = () => {
     setDialog(null)
     reload()
+    accountsQuery.reload()
   }
 
   const totalSaved = goals?.reduce((s, g) => s + Number(g.current_amount), 0) ?? 0
@@ -82,7 +87,7 @@ export function SavingsPage() {
 
       {dialog?.kind === 'goal' && <GoalFormModal goal={dialog.goal} onClose={close} onSaved={saved} />}
       {(dialog?.kind === 'deposit' || dialog?.kind === 'withdraw') && (
-        <ContributionModal goal={dialog.goal} mode={dialog.kind} onClose={close} onSaved={saved} />
+        <ContributionModal goal={dialog.goal} mode={dialog.kind} accounts={sources} onClose={close} onSaved={saved} />
       )}
     </div>
   )
@@ -229,28 +234,62 @@ function GoalFormModal({ goal, onClose, onSaved }: { goal?: SavingsGoal; onClose
 interface ContributionModalProps {
   goal: SavingsGoal
   mode: 'deposit' | 'withdraw'
+  /** Cuentas bancarias o de efectivo. */
+  accounts: Account[]
   onClose: () => void
   onSaved: () => void
 }
 
-function ContributionModal({ goal, mode, onClose, onSaved }: ContributionModalProps) {
+function ContributionModal({ goal, mode, accounts, onClose, onSaved }: ContributionModalProps) {
   const [amount, setAmount] = useState('')
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? '')
+  const [date, setDate] = useState(todayISO())
   const { run, submitting, error } = useSubmit()
   const isDeposit = mode === 'deposit'
   const current = Number(goal.current_amount)
+  const account = accounts.find((a) => a.id === accountId)
+  const exceedsBalance = isDeposit && account !== undefined && Number(amount) > Number(account.balance)
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     const value = Number(amount)
     void run(async () => {
-      await send('POST', `/savings-goals/${goal.id}/contributions`, { amount: isDeposit ? value : -value })
+      await send('POST', `/savings-goals/${goal.id}/contributions`, {
+        account_id: accountId,
+        amount: isDeposit ? value : -value,
+        date,
+      })
       onSaved()
     })
   }
 
+  const title = `${isDeposit ? 'Abonar a' : 'Retirar de'} "${goal.name}"`
+
+  if (accounts.length === 0) {
+    return (
+      <Modal title={title} onClose={onClose}>
+        <p className="text-sm text-ink-secondary">
+          Necesitas una cuenta bancaria o de efectivo {isDeposit ? 'desde la cual ahorrar' : 'a la cual devolver el dinero'}.{' '}
+          <Link to="/cuentas" className="font-medium text-brand-strong hover:underline">
+            Crear cuenta
+          </Link>
+        </p>
+      </Modal>
+    )
+  }
+
   return (
-    <Modal title={`${isDeposit ? 'Abonar a' : 'Retirar de'} "${goal.name}"`} onClose={onClose}>
+    <Modal title={title} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label={isDeposit ? 'Desde la cuenta' : 'Hacia la cuenta'}>
+          <select required value={accountId} onChange={(e) => setAccountId(e.target.value)} className={inputClass}>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name} · {formatCurrency(Number(a.balance))}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="Monto" hint={isDeposit ? undefined : `Disponible en la meta: ${formatCurrency(current)}`}>
           <input
             required
@@ -265,6 +304,21 @@ function ContributionModal({ goal, mode, onClose, onSaved }: ContributionModalPr
             autoFocus
           />
         </Field>
+        {exceedsBalance && (
+          <p className="flex items-start gap-1.5 text-xs text-ink-secondary">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden />
+            El monto supera el saldo de la cuenta; quedará en negativo.
+          </p>
+        )}
+        <Field label="Fecha">
+          <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+        </Field>
+        <p className="text-xs text-ink-muted">
+          {isDeposit
+            ? 'El dinero se descuenta del saldo de la cuenta y queda apartado en la meta. No cuenta como gasto.'
+            : 'El dinero sale de la meta y vuelve al saldo de la cuenta. No cuenta como ingreso.'}{' '}
+          Quedará registrado en Movimientos.
+        </p>
         <FormError message={error} />
         <ModalActions>
           <Button variant="secondary" onClick={onClose}>

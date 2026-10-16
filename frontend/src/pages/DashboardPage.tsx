@@ -82,7 +82,11 @@ export function DashboardPage() {
             <StatCard
               label="Saldo disponible"
               value={formatCurrency(data.available_balance)}
-              hint="Cuentas bancarias y efectivo"
+              hint={
+                data.total_saved > 0
+                  ? `Bancos y efectivo · ${formatCurrency(data.total_saved)} apartados en ahorros`
+                  : 'Cuentas bancarias y efectivo'
+              }
             />
             <DebtMeter ratio={data.debt_to_income} totalDebt={data.total_debt} />
           </section>
