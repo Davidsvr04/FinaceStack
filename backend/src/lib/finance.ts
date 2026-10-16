@@ -2,6 +2,13 @@
 
 export const round2 = (n: number) => Math.round(n * 100) / 100
 
+/**
+ * Filtro PostgREST (.or) para listar cada transferencia una sola vez: de las
+ * transferencias entre cuentas (pago a tarjeta) se muestra solo la pata de
+ * salida; los movimientos de ahorro tienen una sola pata y siempre se ven.
+ */
+export const ONE_ROW_PER_TRANSFER = 'transfer_id.is.null,type.eq.expense,savings_goal_id.not.is.null'
+
 /** Próxima fecha (hoy incluido) en que cae un día del mes; ajusta meses cortos. */
 export function nextDayOfMonth(day: number, from = new Date()): string {
   const today = new Date(Date.UTC(from.getFullYear(), from.getMonth(), from.getDate()))

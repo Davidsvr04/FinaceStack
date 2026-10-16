@@ -1,10 +1,13 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { Router } from 'express'
 import { z } from 'zod'
+import { ONE_ROW_PER_TRANSFER } from '../lib/finance.js'
 import { dbError, getCtx, HttpError, isoDate, money, parse, uuidParam } from '../lib/http.js'
 
 const router = Router()
 
-const SELECT = '*, account:accounts(id, name, type), category:categories(id, name, type)'
+const SELECT =
+  '*, account:accounts(id, name, type), category:categories(id, name, type), savings_goal:savings_goals(id, name)'
 
 const createSchema = z.object({
   account_id: z.uuid(),
@@ -18,10 +21,10 @@ const createSchema = z.object({
 const listSchema = z.object({
   from: isoDate.optional(),
   to: isoDate.optional(),
-  type: z.enum(['income', 'expense']).optional(),
+  // income/expense = movimientos reales; transfer = pagos a tarjeta y ahorros.
+  kind: z.enum(['income', 'expense', 'transfer']).optional(),
   account_id: z.uuid().optional(),
   category_id: z.uuid().optional(),
-  include_transfers: z.stringbool().default(false),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 })
@@ -39,15 +42,40 @@ router.get('/', async (req, res) => {
 
   if (filters.from) query = query.gte('date', filters.from)
   if (filters.to) query = query.lte('date', filters.to)
-  if (filters.type) query = query.eq('type', filters.type)
-  if (filters.account_id) query = query.eq('account_id', filters.account_id)
+  if (filters.kind === 'transfer') query = query.not('transfer_id', 'is', null)
+  else if (filters.kind) query = query.eq('type', filters.kind).is('transfer_id', null)
   if (filters.category_id) query = query.eq('category_id', filters.category_id)
-  if (!filters.include_transfers) query = query.is('transfer_id', null)
+  if (filters.account_id) query = query.eq('account_id', filters.account_id)
+  else query = query.or(ONE_ROW_PER_TRANSFER)
 
   const { data, error, count } = await query
   if (error) throw dbError(error)
-  res.json({ data, total: count ?? 0 })
+
+  res.json({ data: await withCounterparts(supabase, data), total: count ?? 0 })
 })
+
+/** Añade counterpart_account (la otra cuenta) a las transferencias entre cuentas. */
+async function withCounterparts<T extends { id: string; transfer_id: string | null; savings_goal_id: string | null }>(
+  supabase: SupabaseClient,
+  rows: T[],
+): Promise<(T & { counterpart_account: unknown })[]> {
+  const transferIds = [
+    ...new Set(rows.filter((r) => r.transfer_id && !r.savings_goal_id).map((r) => r.transfer_id!)),
+  ]
+  if (transferIds.length === 0) return rows.map((r) => ({ ...r, counterpart_account: null }))
+
+  const { data: legs, error } = await supabase
+    .from('transactions')
+    .select('id, transfer_id, account:accounts(id, name, type)')
+    .in('transfer_id', transferIds)
+  if (error) throw dbError(error)
+
+  return rows.map((row) => ({
+    ...row,
+    counterpart_account:
+      legs.find((leg) => leg.transfer_id === row.transfer_id && leg.id !== row.id)?.account ?? null,
+  }))
+}
 
 router.post('/', async (req, res) => {
   const { supabase, userId } = getCtx(req)

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { currentMonth, monthStart, round2 } from '../lib/finance.js'
+import { currentMonth, monthStart, ONE_ROW_PER_TRANSFER, round2 } from '../lib/finance.js'
 import { dbError, getCtx, parse } from '../lib/http.js'
 
 const router = Router()
@@ -33,7 +33,7 @@ router.get('/summary', async (req, res) => {
   const monthFrom = monthStart(month)
   const to = monthStart(month, 1)
 
-  const [txResult, accountsResult, recentResult] = await Promise.all([
+  const [txResult, accountsResult, recentResult, goalsResult] = await Promise.all([
     supabase
       .from('transactions')
       .select('type, amount, date, category:categories(name)')
@@ -42,18 +42,25 @@ router.get('/summary', async (req, res) => {
       .is('transfer_id', null)
       .overrideTypes<TxRow[], { merge: false }>(),
     supabase.from('accounts').select('type, balance, credit_limit'),
+    // Últimos movimientos, incluidas transferencias y ahorros (una fila cada una).
     supabase
       .from('transactions')
-      .select('id, type, amount, date, description, category:categories(name), account:accounts(name)')
-      .is('transfer_id', null)
+      .select(
+        'id, type, amount, date, description, transfer_id, category:categories(name), account:accounts(name), savings_goal:savings_goals(name)',
+      )
+      .or(ONE_ROW_PER_TRANSFER)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(5),
+    supabase.from('savings_goals').select('current_amount'),
   ])
 
   if (txResult.error) throw dbError(txResult.error)
   if (accountsResult.error) throw dbError(accountsResult.error)
   if (recentResult.error) throw dbError(recentResult.error)
+  if (goalsResult.error) throw dbError(goalsResult.error)
+
+  const totalSaved = goalsResult.data.reduce((sum, goal) => sum + Number(goal.current_amount), 0)
 
   // Tendencia: un bucket por mes, incluidos los meses sin movimientos.
   const trend = Array.from({ length: TREND_MONTHS }, (_, i) => ({
@@ -101,6 +108,8 @@ router.get('/summary', async (req, res) => {
     expense: round2(expense),
     net: round2(income - expense),
     available_balance: round2(availableBalance),
+    // Dinero apartado en metas: ya está descontado de available_balance.
+    total_saved: round2(totalSaved),
     total_debt: round2(totalDebt),
     // Nivel de endeudamiento: deuda total / ingresos del mes.
     // null cuando no hay ingresos en el mes (el ratio no es significativo).
