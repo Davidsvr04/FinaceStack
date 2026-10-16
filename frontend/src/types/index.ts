@@ -48,10 +48,18 @@ export interface Transaction {
   amount: number
   date: string
   description: string | null
+  /** No nulo = transferencia (pago a tarjeta o ahorro): no es ingreso ni gasto. */
   transfer_id: string | null
+  savings_goal_id: string | null
   account: { id: string; name: string; type: AccountType } | null
   category: { id: string; name: string; type: TransactionType } | null
+  savings_goal: { id: string; name: string } | null
+  /** La otra cuenta en una transferencia entre cuentas. */
+  counterpart_account: { id: string; name: string; type: AccountType } | null
 }
+
+/** Filtro de movimientos: reales (ingreso/gasto) o transferencias. */
+export type TransactionKind = TransactionType | 'transfer'
 
 export interface Paginated<T> {
   data: T[]
@@ -84,8 +92,10 @@ export interface RecentTransaction {
   amount: number
   date: string
   description: string | null
+  transfer_id: string | null
   category: { name: string } | null
   account: { name: string } | null
+  savings_goal: { name: string } | null
 }
 
 export interface DashboardSummary {
@@ -94,6 +104,8 @@ export interface DashboardSummary {
   expense: number
   net: number
   available_balance: number
+  /** Apartado en metas de ahorro; ya descontado de available_balance. */
+  total_saved: number
   total_debt: number
   debt_to_income: number | null
   credit_utilization: number | null

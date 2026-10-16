@@ -1,14 +1,16 @@
-import { ArrowDownLeft, ArrowUpRight, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { EmptyState } from '../components/EmptyState'
 import { Spinner } from '../components/Spinner'
+import { MovementContent } from '../components/transactions/MovementContent'
 import { TransactionFormModal } from '../components/transactions/TransactionFormModal'
+import { TransferDetailModal } from '../components/transactions/TransferDetailModal'
 import { Button, Card, ErrorBanner, inputClass, PageHeader } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { api } from '../lib/api'
 import { currentMonth, formatCurrency, formatLongDate, monthRange } from '../lib/format'
-import type { Account, Category, Paginated, Transaction, TransactionType } from '../types'
+import type { Account, Category, Paginated, Transaction, TransactionKind } from '../types'
 
 const PAGE_SIZE = 50
 
@@ -19,7 +21,7 @@ export function TransactionsPage() {
   const categories = categoriesQuery.data ?? []
 
   const [month, setMonth] = useState(currentMonth)
-  const [type, setType] = useState<TransactionType | ''>('')
+  const [kind, setKind] = useState<TransactionKind | ''>('')
   const [accountId, setAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
 
@@ -32,11 +34,11 @@ export function TransactionsPage() {
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ ...monthRange(month), limit: String(PAGE_SIZE) })
-    if (type) params.set('type', type)
+    if (kind) params.set('kind', kind)
     if (accountId) params.set('account_id', accountId)
     if (categoryId) params.set('category_id', categoryId)
     return params.toString()
-  }, [month, type, accountId, categoryId])
+  }, [month, kind, accountId, categoryId])
 
   useEffect(() => {
     let cancelled = false
@@ -80,16 +82,20 @@ export function TransactionsPage() {
     return [...byDate]
   }, [items])
 
-  const income = items.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-  const expense = items.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
+  // Las transferencias (pagos a tarjeta, ahorros) no son ingresos ni gastos.
+  const sumOf = (type: 'income' | 'expense') =>
+    items.filter((t) => t.type === type && !t.transfer_id).reduce((s, t) => s + Number(t.amount), 0)
+  const income = sumOf('income')
+  const expense = sumOf('expense')
   const hasAccounts = accounts.length > 0
-  const filteredCategories = type ? categories.filter((c) => c.type === type) : categories
+  const filteredCategories =
+    kind === 'income' || kind === 'expense' ? categories.filter((c) => c.type === kind) : categories
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Movimientos"
-        subtitle="Ingresos y gastos"
+        subtitle="Ingresos, gastos, pagos a tarjeta y ahorros"
         actions={
           <Button onClick={() => setEditing('new')} disabled={!hasAccounts}>
             <Plus className="size-4" aria-hidden />
@@ -117,16 +123,17 @@ export function TransactionsPage() {
         />
         <select
           aria-label="Tipo"
-          value={type}
+          value={kind}
           onChange={(e) => {
-            setType(e.target.value as TransactionType | '')
+            setKind(e.target.value as TransactionKind | '')
             setCategoryId('')
           }}
           className={inputClass}
         >
-          <option value="">Ingresos y gastos</option>
+          <option value="">Todos los movimientos</option>
           <option value="income">Solo ingresos</option>
           <option value="expense">Solo gastos</option>
+          <option value="transfer">Pagos a tarjeta y ahorros</option>
         </select>
         <select aria-label="Cuenta" value={accountId} onChange={(e) => setAccountId(e.target.value)} className={inputClass}>
           <option value="">Todas las cuentas</option>
@@ -140,6 +147,7 @@ export function TransactionsPage() {
           aria-label="Categoría"
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
+          disabled={kind === 'transfer'}
           className={inputClass}
         >
           <option value="">Todas las categorías</option>
@@ -187,7 +195,18 @@ export function TransactionsPage() {
         </div>
       )}
 
-      {editing && (
+      {editing && editing !== 'new' && editing.transfer_id && (
+        <TransferDetailModal
+          transaction={editing}
+          onClose={() => setEditing(null)}
+          onDeleted={() => {
+            setEditing(null)
+            refresh()
+          }}
+        />
+      )}
+
+      {editing && (editing === 'new' || !editing.transfer_id) && (
         <TransactionFormModal
           transaction={editing === 'new' ? undefined : editing}
           accounts={accounts}
@@ -205,8 +224,6 @@ export function TransactionsPage() {
 }
 
 function TransactionRow({ tx, onClick }: { tx: Transaction; onClick: () => void }) {
-  const isIncome = tx.type === 'income'
-  const Icon = isIncome ? ArrowDownLeft : ArrowUpRight
   return (
     <li>
       <button
@@ -214,22 +231,7 @@ function TransactionRow({ tx, onClick }: { tx: Transaction; onClick: () => void 
         onClick={onClick}
         className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-ink/[0.03]"
       >
-        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink/5 text-ink-secondary">
-          <Icon className="size-4" aria-hidden />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">
-            {tx.description || tx.category?.name || (isIncome ? 'Ingreso' : 'Gasto')}
-          </span>
-          <span className="block truncate text-xs text-ink-muted">
-            {tx.account?.name ?? '—'}
-            {tx.category && ` · ${tx.category.name}`}
-          </span>
-        </span>
-        <span className="text-sm font-semibold tabular-nums">
-          {isIncome ? '+' : '−'}
-          {formatCurrency(Number(tx.amount))}
-        </span>
+        <MovementContent tx={tx} />
       </button>
     </li>
   )

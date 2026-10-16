@@ -262,8 +262,8 @@ function PaymentModal({ card, sources, onClose, onSaved }: PaymentModalProps) {
             <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
           </Field>
           <p className="text-xs text-ink-muted">
-            El pago se registra como transferencia: descuenta de la cuenta origen y reduce la deuda, sin contar como
-            gasto del mes.
+            El pago descuenta de la cuenta origen y reduce la deuda, sin contar como gasto del mes (los gastos ya se
+            registraron al usar la tarjeta). Quedará registrado en Movimientos.
           </p>
           <FormError message={error} />
           <ModalActions>
