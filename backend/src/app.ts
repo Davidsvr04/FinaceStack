@@ -1,6 +1,6 @@
 import cors from 'cors'
 import express from 'express'
-import { CORS_ORIGIN } from './config/env.js'
+import { assertSupabaseEnv, CORS_ORIGIN } from './config/env.js'
 import { requireAdmin, requireUser } from './middleware/auth.js'
 import { errorHandler, notFound } from './middleware/error.js'
 import accounts from './routes/accounts.js'
@@ -11,31 +11,33 @@ import dashboard from './routes/dashboard.js'
 import savings from './routes/savings.js'
 import transactions from './routes/transactions.js'
 
-export function createApp() {
-  const app = express()
+// Falla al cargar si falta configuración de Supabase, en lugar de en la primera petición.
+assertSupabaseEnv()
 
-  app.disable('x-powered-by')
-  app.use(cors({ origin: CORS_ORIGIN }))
-  app.use(express.json({ limit: '100kb' }))
+const app = express()
 
-  app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok' })
-  })
+app.disable('x-powered-by')
+app.use(cors({ origin: CORS_ORIGIN }))
+app.use(express.json({ limit: '100kb' }))
 
-  // A partir de aquí todo requiere un usuario autenticado.
-  const api = express.Router()
-  api.use(requireUser)
-  api.use('/accounts', accounts)
-  api.use('/categories', categories)
-  api.use('/transactions', transactions)
-  api.use('/savings-goals', savings)
-  api.use('/credit-cards', creditCards)
-  api.use('/dashboard', dashboard)
-  api.use('/admin', requireAdmin, admin)
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok' })
+})
 
-  app.use('/api', api)
-  app.use(notFound)
-  app.use(errorHandler)
+// A partir de aquí todo requiere un usuario autenticado.
+const api = express.Router()
+api.use(requireUser)
+api.use('/accounts', accounts)
+api.use('/categories', categories)
+api.use('/transactions', transactions)
+api.use('/savings-goals', savings)
+api.use('/credit-cards', creditCards)
+api.use('/dashboard', dashboard)
+api.use('/admin', requireAdmin, admin)
 
-  return app
-}
+app.use('/api', api)
+app.use(notFound)
+app.use(errorHandler)
+
+// Vercel usa src/app.ts como entrada y espera la app como export default.
+export default app

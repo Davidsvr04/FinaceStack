@@ -1,8 +1,7 @@
-import { createApp } from './app.js'
-import { assertSupabaseEnv, PORT } from './config/env.js'
+// Servidor local (npm run dev / start). En Vercel la entrada es src/app.ts.
+import app from './app.js'
+import { PORT } from './config/env.js'
 
-assertSupabaseEnv()
-
-createApp().listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`API escuchando en http://localhost:${PORT}`)
 })
