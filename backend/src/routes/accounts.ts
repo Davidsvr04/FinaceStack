@@ -1,8 +1,37 @@
+import { createAdminClient } from '@supabase/server/core'
 import { Router } from 'express'
 import { z } from 'zod'
-import { dbError, getCtx, HttpError, parse, uuidParam } from '../lib/http.js'
+import { localToday } from '../lib/finance.js'
+import { dbError, getCtx, HttpError, isoDate, parse, uuidParam } from '../lib/http.js'
 
 const router = Router()
+
+/**
+ * Traduce la cuota de manejo del formulario (valor + fecha del próximo cobro)
+ * a las columnas de la tabla. null en el valor = quitar la cuota.
+ */
+function handlingFeeColumns(input: { handling_fee_amount?: number | null; handling_fee_start?: string | null }) {
+  const { handling_fee_amount: amount, handling_fee_start: start } = input
+  if (amount === undefined) return {}
+  if (amount === null) return { handling_fee_amount: null, handling_fee_day: null, handling_fee_start: null }
+  if (!start) throw new HttpError(400, 'Indica la fecha en que te cobran la cuota de manejo')
+  return { handling_fee_amount: amount, handling_fee_day: Number(start.slice(8, 10)), handling_fee_start: start }
+}
+
+/**
+ * Registra en el momento los cobros de cuota de manejo que ya correspondan
+ * (p. ej. si la fecha indicada es de hoy o pasada). El job diario hace el resto.
+ * La función solo la ejecuta la secret key; la propiedad de la cuenta ya se
+ * validó al guardarla con el cliente del usuario.
+ */
+async function generateHandlingFees(accountId: string): Promise<number> {
+  const { data, error } = await createAdminClient().rpc('generate_handling_fees', {
+    p_account_id: accountId,
+    p_today: localToday(),
+  })
+  if (error) throw dbError(error)
+  return Number(data ?? 0)
+}
 
 const creditCardFields = {
   credit_limit: z.coerce.number().nonnegative().optional(),
@@ -14,6 +43,9 @@ const creditCardFields = {
   opening_billed_debt: z.coerce.number().nonnegative().multipleOf(0.01).optional(),
   opening_next_charge: z.coerce.number().nonnegative().multipleOf(0.01).nullable().optional(),
   opening_later_installments: z.coerce.number().int().min(1).max(48).optional(),
+  // Cuota de manejo: valor y fecha del próximo cobro (de ahí sale el día del mes).
+  handling_fee_amount: z.coerce.number().positive().multipleOf(0.01).nullable().optional(),
+  handling_fee_start: isoDate.nullable().optional(),
 }
 
 const createSchema = z.object({
@@ -54,10 +86,12 @@ router.post('/', async (req, res) => {
     throw new HttpError(400, 'Lo facturado más lo del próximo extracto no puede superar la deuda actual')
   }
 
+  const { handling_fee_amount, handling_fee_start, ...fields } = input
   const { data, error } = await supabase
     .from('accounts')
     .insert({
-      ...input,
+      ...fields,
+      ...handlingFeeColumns({ handling_fee_amount, handling_fee_start }),
       user_id: userId,
       // En tarjetas la deuda se guarda en negativo (ver convención en el SQL).
       balance: isCard ? -Math.abs(initial_balance) : initial_balance,
@@ -66,23 +100,25 @@ router.post('/', async (req, res) => {
     .single()
 
   if (error) throw dbError(error)
-  res.status(201).json(data)
+  const generated = data.handling_fee_amount ? await generateHandlingFees(data.id) : 0
+  res.status(201).json({ ...data, handling_fees_generated: generated })
 })
 
 router.patch('/:id', async (req, res) => {
   const { supabase } = getCtx(req)
   const { id } = parse(uuidParam, req.params)
-  const input = parse(updateSchema, req.body)
+  const { handling_fee_amount, handling_fee_start, ...fields } = parse(updateSchema, req.body)
 
   const { data, error } = await supabase
     .from('accounts')
-    .update(input)
+    .update({ ...fields, ...handlingFeeColumns({ handling_fee_amount, handling_fee_start }) })
     .eq('id', id)
     .select()
     .single()
 
   if (error) throw dbError(error)
-  res.json(data)
+  const generated = data.handling_fee_amount ? await generateHandlingFees(data.id) : 0
+  res.json({ ...data, handling_fees_generated: generated })
 })
 
 router.delete('/:id', async (req, res) => {

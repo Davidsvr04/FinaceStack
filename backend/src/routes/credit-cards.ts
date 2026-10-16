@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { cardStatement, round2, simulatePayoff } from '../lib/finance.js'
+import { cardStatement, localToday, round2, simulatePayoff } from '../lib/finance.js'
 import { dbError, getCtx, isoDate, money, parse, uuidParam } from '../lib/http.js'
 
 // Las tarjetas se crean/editan/borran por /api/accounts con type=credit_card.
@@ -25,7 +25,7 @@ const listSchema = z.object({ today: isoDate.optional() })
 
 router.get('/', async (req, res) => {
   const { supabase } = getCtx(req)
-  const today = parse(listSchema, req.query).today ?? new Date().toISOString().slice(0, 10)
+  const today = parse(listSchema, req.query).today ?? localToday()
 
   const { data: cards, error } = await supabase
     .from('accounts')

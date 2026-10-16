@@ -2,6 +2,14 @@
 
 export const round2 = (n: number) => Math.round(n * 100) / 100
 
+/** Zona horaria de la app (la misma que usa el job de cuotas de manejo). */
+export const APP_TIME_ZONE = process.env.APP_TIME_ZONE ?? 'America/Bogota'
+
+/** Fecha de hoy 'YYYY-MM-DD' en la zona de la app (el servidor corre en UTC). */
+export function localToday(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIME_ZONE }).format(new Date())
+}
+
 /**
  * Filtro PostgREST (.or) para listar cada transferencia una sola vez: de las
  * transferencias entre cuentas (pago a tarjeta) se muestra solo la pata de
