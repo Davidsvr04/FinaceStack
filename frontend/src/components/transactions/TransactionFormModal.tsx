@@ -1,8 +1,8 @@
-import { Plus } from 'lucide-react'
+import { CalendarClock, Plus } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useSubmit } from '../../hooks/useSubmit'
 import { send } from '../../lib/api'
-import { formatCurrency, formatPercent, todayISO } from '../../lib/format'
+import { formatCurrency, formatMonth, formatPercent, todayISO } from '../../lib/format'
 import { INSTALLMENT_OPTIONS } from '../../lib/labels'
 import type { Account, Category, Transaction, TransactionType } from '../../types'
 import { Button, Field, FormError, inputClass, Modal, ModalActions } from '../ui'
@@ -13,7 +13,8 @@ interface Props {
   categories: Category[]
   onCategoriesChanged: () => void
   onClose: () => void
-  onSaved: () => void
+  /** savedDate: fecha del movimiento guardado (undefined al eliminar). */
+  onSaved: (savedDate?: string) => void
 }
 
 export function TransactionFormModal({
@@ -64,7 +65,7 @@ export function TransactionFormModal({
     void save.run(async () => {
       if (transaction) await send('PATCH', `/transactions/${transaction.id}`, body)
       else await send('POST', '/transactions', body)
-      onSaved()
+      onSaved(date)
     })
   }
 
@@ -207,6 +208,13 @@ export function TransactionFormModal({
         <Field label="Fecha">
           <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
         </Field>
+        {date && date.slice(0, 7) !== todayISO().slice(0, 7) && (
+          <p className="flex items-start gap-1.5 text-xs text-ink-secondary">
+            <CalendarClock className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden />
+            {date > todayISO() ? 'Fecha futura: ' : 'Fecha de otro mes: '}
+            este movimiento se verá en Movimientos de {formatMonth(date.slice(0, 7))}.
+          </p>
+        )}
 
         <Field label="Descripción (opcional)">
           <input

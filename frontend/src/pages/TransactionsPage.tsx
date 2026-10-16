@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { EmptyState } from '../components/EmptyState'
 import { Spinner } from '../components/Spinner'
 import { MovementContent } from '../components/transactions/MovementContent'
@@ -20,7 +20,12 @@ export function TransactionsPage() {
   const accounts = accountsQuery.data ?? []
   const categories = categoriesQuery.data ?? []
 
-  const [month, setMonth] = useState(currentMonth)
+  // ?mes=YYYY-MM permite abrir la página en un mes concreto (p. ej. desde Inicio).
+  const [searchParams] = useSearchParams()
+  const [month, setMonth] = useState(() => {
+    const fromUrl = searchParams.get('mes')
+    return fromUrl && /^\d{4}-(0[1-9]|1[0-2])$/.test(fromUrl) ? fromUrl : currentMonth()
+  })
   const [kind, setKind] = useState<TransactionKind | ''>('')
   const [accountId, setAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -213,9 +218,12 @@ export function TransactionsPage() {
           categories={categories}
           onCategoriesChanged={categoriesQuery.reload}
           onClose={() => setEditing(null)}
-          onSaved={() => {
+          onSaved={(savedDate) => {
             setEditing(null)
-            refresh()
+            // Si quedó en otro mes, se muestra ese mes para que el movimiento se vea.
+            const savedMonth = savedDate?.slice(0, 7)
+            if (savedMonth && savedMonth !== month) setMonth(savedMonth)
+            else refresh()
           }}
         />
       )}
