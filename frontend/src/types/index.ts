@@ -27,6 +27,12 @@ export interface Account {
   opening_next_charge: number | null
   /** En cuántos meses se cobra lo que queda. */
   opening_later_installments: number
+  /** Cuota de manejo mensual (null = sin cuota); se genera como gasto automático. */
+  handling_fee_amount: number | null
+  /** Día del mes en que se cobra la cuota de manejo. */
+  handling_fee_day: number | null
+  /** Primera fecha de cobro registrada. */
+  handling_fee_start: string | null
   created_at: string
 }
 

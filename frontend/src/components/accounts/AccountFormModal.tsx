@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useSubmit } from '../../hooks/useSubmit'
 import { send } from '../../lib/api'
-import { formatCurrency, optionalNumber } from '../../lib/format'
+import { formatCurrency, formatDate, nextOccurrence, optionalNumber, todayISO } from '../../lib/format'
 import { ACCOUNT_TYPES, INSTALLMENT_OPTIONS } from '../../lib/labels'
 import type { Account, AccountType, CreditCard } from '../../types'
 import { Button, Field, FormError, inputClass, Modal, ModalActions } from '../ui'
@@ -31,6 +31,9 @@ export function AccountFormModal({ account, defaultType = 'bank', lockType = fal
   )
   const [openingNext, setOpeningNext] = useState(str(account?.opening_next_charge))
   const [openingLater, setOpeningLater] = useState(account?.opening_later_installments ?? 1)
+  const [feeAmount, setFeeAmount] = useState(str(account?.handling_fee_amount))
+  // Al editar se propone la próxima fecha de cobro según el día guardado.
+  const [feeDate, setFeeDate] = useState(account?.handling_fee_day ? nextOccurrence(account.handling_fee_day) : '')
   const [ratePct, setRatePct] = useState(
     account?.monthly_interest_rate == null ? '' : String(+(account.monthly_interest_rate * 100).toFixed(4)),
   )
@@ -57,6 +60,12 @@ export function AccountFormModal({ account, defaultType = 'bank', lockType = fal
           cut_off_day: optionalNumber(cutOffDay),
           payment_due_day: optionalNumber(paymentDueDay),
           monthly_interest_rate: rate === undefined ? undefined : rate / 100,
+          // Sin valor = sin cuota de manejo (al editar, la quita).
+          ...(optionalNumber(feeAmount)
+            ? { handling_fee_amount: optionalNumber(feeAmount), handling_fee_start: feeDate }
+            : isEdit && account?.handling_fee_amount
+              ? { handling_fee_amount: null }
+              : {}),
           ...(openingDebt > 0 && {
             opening_billed_debt: optionalNumber(openingBilled) ?? 0,
             opening_next_charge: nextCharge ?? null,
@@ -221,6 +230,38 @@ export function AccountFormModal({ account, defaultType = 'bank', lockType = fal
                 />
               </Field>
             </div>
+            <fieldset className="space-y-3 rounded-lg border border-hairline p-3">
+              <legend className="px-1 text-sm font-medium">Cuota de manejo (opcional)</legend>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Valor mensual">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    inputMode="decimal"
+                    value={feeAmount}
+                    onChange={(e) => setFeeAmount(e.target.value)}
+                    placeholder="Sin cuota"
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Próximo cobro">
+                  <input
+                    type="date"
+                    required={Boolean(optionalNumber(feeAmount))}
+                    value={feeDate}
+                    onChange={(e) => setFeeDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+              <p className="text-xs text-ink-muted">
+                {optionalNumber(feeAmount) && feeDate
+                  ? `Se registrará automáticamente un gasto de ${formatCurrency(optionalNumber(feeAmount)!)} en esta tarjeta el día ${Number(feeDate.slice(8, 10))} de cada mes, desde el ${formatDate(feeDate)}.`
+                  : 'Se registra sola como gasto en la tarjeta cada mes, en la fecha de cobro. Déjala vacía si tu tarjeta no cobra cuota de manejo.'}
+                {feeDate && feeDate < todayISO() && ' Como la fecha ya pasó, también se registran los cobros desde esa fecha.'}
+              </p>
+            </fieldset>
             <Field label="Tasa de interés mensual (%)" hint="Ejemplo: 2.15 para 2,15 % mensual">
               <input
                 type="number"

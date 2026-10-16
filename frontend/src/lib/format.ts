@@ -57,6 +57,17 @@ export function todayISO(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 
+/** Próxima fecha (hoy incluido) en que cae un día del mes; ajusta meses cortos. */
+export function nextOccurrence(day: number, from = todayISO()): string {
+  const [year, m] = from.split('-').map(Number)
+  for (const offset of [0, 1]) {
+    const lastDay = new Date(year!, m! + offset, 0).getDate()
+    const date = `${new Date(year!, m! - 1 + offset, 1).getFullYear()}-${pad(((m! - 1 + offset) % 12) + 1)}-${pad(Math.min(day, lastDay))}`
+    if (date >= from) return date
+  }
+  throw new Error('unreachable')
+}
+
 /** Primer y último día de un mes "YYYY-MM". */
 export function monthRange(month: string): { from: string; to: string } {
   const [year, m] = month.split('-').map(Number)

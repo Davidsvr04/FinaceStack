@@ -7,6 +7,7 @@ import {
   OctagonAlert,
   Pencil,
   Plus,
+  Repeat,
   Trash2,
   type LucideIcon,
 } from 'lucide-react'
@@ -32,7 +33,15 @@ import {
 import { useApi } from '../hooks/useApi'
 import { useSubmit } from '../hooks/useSubmit'
 import { send } from '../lib/api'
-import { daysUntil, formatCurrency, formatDate, formatPercent, optionalNumber, todayISO } from '../lib/format'
+import {
+  daysUntil,
+  formatCurrency,
+  formatDate,
+  formatPercent,
+  nextOccurrence,
+  optionalNumber,
+  todayISO,
+} from '../lib/format'
 import type { Account, CreditCard, PayoffSimulation } from '../types'
 
 type Dialog =
@@ -199,6 +208,14 @@ function CardTile({ card, onPay, onSimulate, onEdit, onDelete }: CardTileProps) 
 
       <NextPayment card={card} />
       <UpcomingStatements card={card} />
+
+      {card.handling_fee_amount != null && card.handling_fee_day != null && (
+        <p className="flex items-center gap-1.5 text-xs text-ink-secondary">
+          <Repeat className="size-3.5 text-ink-muted" aria-hidden />
+          Cuota de manejo: {formatCurrency(Number(card.handling_fee_amount))} el día {card.handling_fee_day} de cada mes
+          · próximo cobro {formatDate(nextOccurrence(card.handling_fee_day))}
+        </p>
+      )}
 
       <div className="mt-auto flex gap-2">
         <Button onClick={onPay} disabled={card.debt === 0} className="flex-1">
