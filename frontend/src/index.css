@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+/* Tokens de la interfaz y de los gráficos (paleta validada para daltonismo). */
+@theme {
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-page: #f9f9f7;
+  --color-surface: #fcfcfb;
+  --color-ink: #0b0b0b;
+  --color-ink-secondary: #52514e;
+  --color-ink-muted: #898781;
+  --color-hairline: #e1e0d9;
+
+  --color-brand: #2a78d6;
+  --color-brand-strong: #1c5cab;
+
+  --color-status-good: #0ca30c;
+  --color-status-warning: #fab219;
+  --color-status-critical: #d03b3b;
+}
+
+body {
+  @apply bg-page text-ink antialiased;
+}
