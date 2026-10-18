@@ -91,6 +91,21 @@ export interface Transaction {
   counterpart_account: { id: string; name: string; type: AccountType } | null
 }
 
+/** Plantilla de un movimiento frecuente (transporte, mercado...). */
+export interface MovementTemplate {
+  id: string
+  name: string
+  type: TransactionType
+  /** null = el monto varía y se escribe al usarla. */
+  amount: number | null
+  account_id: string | null
+  category_id: string | null
+  description: string | null
+  installments: number
+  account: { id: string; name: string; type: AccountType } | null
+  category: { id: string; name: string; type: TransactionType } | null
+}
+
 /** Filtro de movimientos: reales (ingreso/gasto) o transferencias. */
 export type TransactionKind = TransactionType | 'transfer'
 
