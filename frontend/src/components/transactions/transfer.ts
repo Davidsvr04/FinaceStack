@@ -1,10 +1,10 @@
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, PiggyBank, type LucideIcon } from 'lucide-react'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CreditCard, PiggyBank, type LucideIcon } from 'lucide-react'
 
 interface MovementLike {
   type: 'income' | 'expense'
   transfer_id: string | null
   description: string | null
-  account: { name: string } | null
+  account: { name: string; type?: string } | null
   category: { name: string } | null
   savings_goal: { name: string } | null
   counterpart_account?: { name: string } | null
@@ -20,10 +20,28 @@ export interface MovementDisplay {
   tag: string | null
 }
 
+/**
+ * Pago de tarjeta hecho con dinero de una meta de ahorro: se guarda como un
+ * ingreso en la tarjeta (baja la deuda) enlazado a la meta, pero para quien lo
+ * ve es dinero que sale del ahorro.
+ */
+export function isGoalPayment(tx: Pick<MovementLike, 'savings_goal' | 'account'>): boolean {
+  return Boolean(tx.savings_goal) && tx.account?.type === 'credit_card'
+}
+
 /** Cómo mostrar un movimiento: ingreso, gasto, pago a tarjeta o ahorro. */
 export function describeMovement(tx: MovementLike): MovementDisplay {
   const account = tx.account?.name ?? '—'
   const isOut = tx.type === 'expense'
+
+  if (tx.savings_goal && isGoalPayment(tx)) {
+    return {
+      icon: CreditCard,
+      title: tx.description ?? 'Pago de tarjeta con ahorro',
+      detail: `Meta ${tx.savings_goal.name} → ${account}`,
+      tag: 'Pago con ahorro',
+    }
+  }
 
   if (tx.savings_goal) {
     const goal = `Meta ${tx.savings_goal.name}`

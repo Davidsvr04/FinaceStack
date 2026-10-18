@@ -1,9 +1,10 @@
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { AccountFormModal } from '../components/accounts/AccountFormModal'
 import { StatCard } from '../components/dashboard/StatCard'
 import { EmptyState } from '../components/EmptyState'
 import { Spinner } from '../components/Spinner'
+import { TransferFormModal } from '../components/transactions/TransferFormModal'
 import { Button, Card, ErrorBanner, IconButton, PageHeader } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useSubmit } from '../hooks/useSubmit'
@@ -15,6 +16,7 @@ import type { Account } from '../types'
 export function AccountsPage() {
   const { data: accounts, error, loading, reload } = useApi<Account[]>('/accounts')
   const [editing, setEditing] = useState<Account | 'new' | null>(null)
+  const [transferring, setTransferring] = useState(false)
   const del = useSubmit()
 
   function handleDelete(account: Account) {
@@ -39,10 +41,18 @@ export function AccountsPage() {
         title="Cuentas"
         subtitle="Administra tus bancos, billeteras de efectivo y tarjetas de crédito"
         actions={
-          <Button onClick={() => setEditing('new')} className="shadow-xs">
-            <Plus className="size-4" aria-hidden />
-            Nueva cuenta
-          </Button>
+          <>
+            {liquid.length >= 2 && (
+              <Button variant="secondary" onClick={() => setTransferring(true)}>
+                <ArrowLeftRight className="size-4" aria-hidden />
+                Transferir
+              </Button>
+            )}
+            <Button onClick={() => setEditing('new')} className="shadow-xs">
+              <Plus className="size-4" aria-hidden />
+              Nueva cuenta
+            </Button>
+          </>
         }
       />
 
@@ -102,6 +112,17 @@ export function AccountsPage() {
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null)
+            reload()
+          }}
+        />
+      )}
+
+      {transferring && accounts && (
+        <TransferFormModal
+          accounts={accounts}
+          onClose={() => setTransferring(false)}
+          onSaved={() => {
+            setTransferring(false)
             reload()
           }}
         />

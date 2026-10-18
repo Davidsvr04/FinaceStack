@@ -41,7 +41,7 @@ import {
   optionalNumber,
   todayISO,
 } from '../lib/format'
-import type { Account, CreditCard, PayoffSimulation } from '../types'
+import type { Account, CreditCard, PayoffSimulation, SavingsGoal } from '../types'
 
 type Dialog =
   | { kind: 'new' }
@@ -50,6 +50,7 @@ type Dialog =
 export function CardsPage() {
   const { data: cards, error, loading, reload } = useApi<CreditCard[]>(`/credit-cards?today=${todayISO()}`)
   const accountsQuery = useApi<Account[]>('/accounts')
+  const goalsQuery = useApi<SavingsGoal[]>('/savings-goals')
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const del = useSubmit()
 
@@ -69,6 +70,7 @@ export function CardsPage() {
     setDialog(null)
     reload()
     accountsQuery.reload()
+    goalsQuery.reload()
   }
 
   const totalDebt = cards?.reduce((s, c) => s + c.debt, 0) ?? 0
@@ -139,7 +141,7 @@ export function CardsPage() {
           onSaved={saved}
         />
       )}
-      {dialog?.kind === 'pay' && <PaymentModal card={dialog.card} sources={sources} onClose={close} onSaved={saved} />}
+      {dialog?.kind === 'pay' && <PaymentModal card={dialog.card} sources={sources} goals={goalsQuery.data ?? []} onClose={close} onSaved={saved} />}
       {dialog?.kind === 'simulate' && <SimulationModal card={dialog.card} onClose={close} />}
     </div>
   )
@@ -397,23 +399,35 @@ function UpcomingStatements({ card }: { card: CreditCard }) {
 
 interface PaymentModalProps {
   card: CreditCard
+  /** Cuentas bancarias o de efectivo desde las que se puede pagar. */
   sources: Account[]
+  /** Metas de ahorro desde las que también se puede pagar. */
+  goals: SavingsGoal[]
   onClose: () => void
   onSaved: () => void
 }
 
-function PaymentModal({ card, sources, onClose, onSaved }: PaymentModalProps) {
-  const [fromId, setFromId] = useState(sources[0]?.id ?? '')
+function PaymentModal({ card, sources, goals, onClose, onSaved }: PaymentModalProps) {
+  // Solo las metas con dinero ahorrado pueden pagar.
+  const fundedGoals = goals.filter((g) => Number(g.current_amount) > 0)
+  // El origen se codifica como "account:<id>" o "goal:<id>".
+  const [from, setFrom] = useState(
+    sources[0] ? `account:${sources[0].id}` : fundedGoals[0] ? `goal:${fundedGoals[0].id}` : '',
+  )
   const minimum = card.next_payment?.amount ?? card.debt
   const [amount, setAmount] = useState(String(minimum))
   const [date, setDate] = useState(todayISO())
   const { run, submitting, error } = useSubmit()
 
+  const [kind, sourceId] = from.split(':') as ['account' | 'goal', string]
+  const goal = kind === 'goal' ? fundedGoals.find((g) => g.id === sourceId) : undefined
+  const exceedsGoal = goal !== undefined && Number(amount) > Number(goal.current_amount)
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     void run(async () => {
       await send('POST', `/credit-cards/${card.id}/payments`, {
-        from_account_id: fromId,
+        ...(kind === 'goal' ? { from_goal_id: sourceId } : { from_account_id: sourceId }),
         amount: Number(amount),
         date,
       })
@@ -423,9 +437,9 @@ function PaymentModal({ card, sources, onClose, onSaved }: PaymentModalProps) {
 
   return (
     <Modal title={`Pagar ${card.name}`} onClose={onClose}>
-      {sources.length === 0 ? (
+      {sources.length === 0 && fundedGoals.length === 0 ? (
         <p className="text-sm text-ink-secondary">
-          Necesitas una cuenta bancaria o de efectivo desde la cual pagar.{' '}
+          Necesitas una cuenta bancaria, de efectivo o una meta de ahorro con dinero desde la cual pagar.{' '}
           <Link to="/cuentas" className="font-semibold text-brand hover:underline">
             Crear cuenta
           </Link>
@@ -433,12 +447,25 @@ function PaymentModal({ card, sources, onClose, onSaved }: PaymentModalProps) {
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <Field label="Pagar desde">
-            <select required value={fromId} onChange={(e) => setFromId(e.target.value)} className={inputClass}>
-              {sources.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} · {formatCurrency(Number(s.balance))}
-                </option>
-              ))}
+            <select required value={from} onChange={(e) => setFrom(e.target.value)} className={inputClass}>
+              {sources.length > 0 && (
+                <optgroup label="Cuentas">
+                  {sources.map((s) => (
+                    <option key={s.id} value={`account:${s.id}`}>
+                      {s.name} · {formatCurrency(Number(s.balance))}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {fundedGoals.length > 0 && (
+                <optgroup label="Metas de ahorro">
+                  {fundedGoals.map((g) => (
+                    <option key={g.id} value={`goal:${g.id}`}>
+                      {g.name} · ahorrado {formatCurrency(Number(g.current_amount))}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </Field>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Montos sugeridos">
@@ -480,15 +507,23 @@ function PaymentModal({ card, sources, onClose, onSaved }: PaymentModalProps) {
           <Field label="Fecha">
             <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
           </Field>
+          {exceedsGoal && (
+            <p className="flex items-start gap-1.5 text-xs text-status-critical">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              El monto supera lo ahorrado en «{goal.name}» ({formatCurrency(Number(goal.current_amount))}).
+            </p>
+          )}
           <p className="text-xs text-ink-muted">
-            El pago descuenta de la cuenta origen y reduce la deuda sin contar como gasto doble.
+            {kind === 'goal'
+              ? 'El pago se descuenta de la meta de ahorro y reduce la deuda de la tarjeta. No cuenta como gasto ni como ingreso.'
+              : 'El pago descuenta de la cuenta origen y reduce la deuda sin contar como gasto doble.'}
           </p>
           <FormError message={error} />
           <ModalActions>
             <Button variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" disabled={submitting || exceedsGoal}>
               {submitting ? 'Registrando…' : 'Registrar pago'}
             </Button>
           </ModalActions>

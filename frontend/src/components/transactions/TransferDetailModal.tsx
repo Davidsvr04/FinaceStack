@@ -3,7 +3,7 @@ import { send } from '../../lib/api'
 import { formatCurrency, formatLongDate } from '../../lib/format'
 import type { Transaction } from '../../types'
 import { Button, FormError, Modal, ModalActions } from '../ui'
-import { describeMovement } from './transfer'
+import { describeMovement, isGoalPayment } from './transfer'
 
 interface Props {
   transaction: Transaction
@@ -19,13 +19,16 @@ export function TransferDetailModal({ transaction: tx, onClose, onDeleted }: Pro
   const { title, detail, tag } = describeMovement(tx)
   const { run, submitting, error } = useSubmit()
   const isSavings = Boolean(tx.savings_goal_id)
+  const goalPayment = isGoalPayment(tx)
 
   function handleDelete() {
-    const consequence = isSavings
-      ? tx.type === 'expense'
-        ? 'El dinero volverá a la cuenta y se descontará de la meta.'
-        : 'El dinero volverá a la meta y se descontará de la cuenta.'
-      : 'Se revertirá en ambas cuentas.'
+    const consequence = goalPayment
+      ? 'La deuda de la tarjeta vuelve a subir y el dinero regresa a la meta.'
+      : isSavings
+        ? tx.type === 'expense'
+          ? 'El dinero volverá a la cuenta y se descontará de la meta.'
+          : 'El dinero volverá a la meta y se descontará de la cuenta.'
+        : 'Se revertirá en ambas cuentas.'
     if (!window.confirm(`¿Eliminar este movimiento? ${consequence}`)) return
     void run(async () => {
       await send('DELETE', `/transactions/${tx.id}`)
@@ -56,9 +59,11 @@ export function TransferDetailModal({ transaction: tx, onClose, onDeleted }: Pro
         </div>
       </dl>
       <p className="mt-4 text-xs text-ink-muted">
-        {isSavings
-          ? 'Mover dinero a una meta de ahorro descuenta del saldo de la cuenta, pero no cuenta como gasto.'
-          : 'Un pago a tarjeta mueve dinero entre tus cuentas: no cuenta como gasto ni como ingreso.'}{' '}
+        {goalPayment
+          ? 'Pagar la tarjeta con ahorro descuenta de la meta y baja la deuda; no cuenta como gasto ni como ingreso.'
+          : isSavings
+            ? 'Mover dinero a una meta de ahorro descuenta del saldo de la cuenta, pero no cuenta como gasto.'
+            : 'Mover dinero entre tus cuentas (transferencias y pagos a tarjeta) no cuenta como gasto ni como ingreso.'}{' '}
         Para corregirlo, elimínalo y regístralo de nuevo.
       </p>
       <FormError message={error} />

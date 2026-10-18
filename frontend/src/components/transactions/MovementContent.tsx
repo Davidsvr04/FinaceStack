@@ -1,12 +1,13 @@
 import { formatCurrency, formatDate } from '../../lib/format'
-import { describeMovement } from './transfer'
+import { describeMovement, isGoalPayment } from './transfer'
 
 type Movement = Parameters<typeof describeMovement>[0] & { amount: number; date: string }
 
 /** Contenido estilizado de una fila de movimiento (icono con color temático, detalle e importe). */
 export function MovementContent({ tx, showDate = false }: { tx: Movement; showDate?: boolean }) {
   const { icon: Icon, title, detail, tag } = describeMovement(tx)
-  const isIncome = tx.type === 'income'
+  // Pagar la tarjeta con ahorro es un ingreso en la tarjeta, pero dinero que sale de la meta.
+  const isIncome = tx.type === 'income' && !isGoalPayment(tx)
 
   // Tema de color según tipo de movimiento
   let iconTheme = 'bg-slate-100 text-slate-600 border border-slate-200'
