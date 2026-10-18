@@ -1,4 +1,4 @@
-import { Filter, Plus, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { ArrowLeftRight, ChevronLeft, ChevronRight, Filter, Plus, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { EmptyState } from '../components/EmptyState'
@@ -6,10 +6,11 @@ import { Spinner } from '../components/Spinner'
 import { MovementContent } from '../components/transactions/MovementContent'
 import { TransactionFormModal } from '../components/transactions/TransactionFormModal'
 import { TransferDetailModal } from '../components/transactions/TransferDetailModal'
-import { Button, ErrorBanner, inputClass, PageHeader } from '../components/ui'
+import { TransferFormModal } from '../components/transactions/TransferFormModal'
+import { Button, ErrorBanner, IconButton, inputClass, PageHeader } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { api } from '../lib/api'
-import { currentMonth, formatCurrency, formatLongDate, monthRange } from '../lib/format'
+import { currentMonth, formatCurrency, formatLongDate, monthRange, shiftMonth } from '../lib/format'
 import type { Account, Category, Paginated, Transaction, TransactionKind } from '../types'
 
 const PAGE_SIZE = 50
@@ -26,6 +27,8 @@ export function TransactionsPage() {
     const fromUrl = searchParams.get('mes')
     return fromUrl && /^\d{4}-(0[1-9]|1[0-2])$/.test(fromUrl) ? fromUrl : currentMonth()
   })
+  // Todo el historial, sin filtrar por mes.
+  const [allMonths, setAllMonths] = useState(false)
   const [kind, setKind] = useState<TransactionKind | ''>('')
   const [accountId, setAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -36,14 +39,27 @@ export function TransactionsPage() {
   const [listError, setListError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
   const [editing, setEditing] = useState<Transaction | 'new' | null>(null)
+  const [transferring, setTransferring] = useState(false)
 
   const query = useMemo(() => {
-    const params = new URLSearchParams({ ...monthRange(month), limit: String(PAGE_SIZE) })
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
+    if (!allMonths) {
+      const range = monthRange(month)
+      params.set('from', range.from)
+      params.set('to', range.to)
+    }
     if (kind) params.set('kind', kind)
     if (accountId) params.set('account_id', accountId)
     if (categoryId) params.set('category_id', categoryId)
     return params.toString()
-  }, [month, kind, accountId, categoryId])
+  }, [allMonths, month, kind, accountId, categoryId])
+
+  /** Tras guardar algo con fecha de otro mes, se muestra ese mes para que se vea. */
+  function afterSave(savedDate?: string) {
+    const savedMonth = savedDate?.slice(0, 7)
+    if (!allMonths && savedMonth && savedMonth !== month) setMonth(savedMonth)
+    else refresh()
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -103,10 +119,16 @@ export function TransactionsPage() {
         title="Movimientos"
         subtitle="Monitorea tus ingresos, gastos diarios, pagos de tarjetas y transferencias"
         actions={
-          <Button onClick={() => setEditing('new')} disabled={!hasAccounts} className="shadow-xs">
-            <Plus className="size-4" aria-hidden />
-            Nuevo movimiento
-          </Button>
+          <>
+            <Button variant="secondary" onClick={() => setTransferring(true)} disabled={!hasAccounts}>
+              <ArrowLeftRight className="size-4" aria-hidden />
+              Transferir
+            </Button>
+            <Button onClick={() => setEditing('new')} disabled={!hasAccounts} className="shadow-xs">
+              <Plus className="size-4" aria-hidden />
+              Nuevo movimiento
+            </Button>
+          </>
         }
       />
 
@@ -129,13 +151,32 @@ export function TransactionsPage() {
           <span>Filtros de Búsqueda</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <input
-            type="month"
-            aria-label="Mes"
-            value={month}
-            onChange={(e) => e.target.value && setMonth(e.target.value)}
-            className={inputClass}
-          />
+          <div className="flex items-center gap-1.5">
+            <IconButton
+              label="Mes anterior"
+              onClick={() => setMonth(shiftMonth(month, -1))}
+              disabled={allMonths}
+              className="shrink-0 border border-hairline"
+            >
+              <ChevronLeft className="size-4" aria-hidden />
+            </IconButton>
+            <input
+              type="month"
+              aria-label="Mes"
+              value={month}
+              disabled={allMonths}
+              onChange={(e) => e.target.value && setMonth(e.target.value)}
+              className={inputClass}
+            />
+            <IconButton
+              label="Mes siguiente"
+              onClick={() => setMonth(shiftMonth(month, 1))}
+              disabled={allMonths}
+              className="shrink-0 border border-hairline"
+            >
+              <ChevronRight className="size-4" aria-hidden />
+            </IconButton>
+          </div>
           <select
             aria-label="Tipo"
             value={kind}
@@ -148,7 +189,7 @@ export function TransactionsPage() {
             <option value="">Todos los movimientos</option>
             <option value="income">Solo ingresos</option>
             <option value="expense">Solo gastos</option>
-            <option value="transfer">Pagos a tarjeta y ahorros</option>
+            <option value="transfer">Transferencias, pagos a tarjeta y ahorros</option>
           </select>
           <select
             aria-label="Cuenta"
@@ -178,6 +219,15 @@ export function TransactionsPage() {
             ))}
           </select>
         </div>
+        <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-sm text-ink-secondary">
+          <input
+            type="checkbox"
+            checked={allMonths}
+            onChange={(e) => setAllMonths(e.target.checked)}
+            className="size-4 rounded border-hairline accent-brand"
+          />
+          Ver todos los meses
+        </label>
       </div>
 
       {/* Mini Resumen del Filtro */}
@@ -186,7 +236,7 @@ export function TransactionsPage() {
           <div className="flex items-center justify-between rounded-xl border border-status-good/20 bg-status-good/5 px-4 py-3">
             <div className="flex items-center gap-2">
               <TrendingUp className="size-4 text-status-good" />
-              <span className="text-xs font-semibold text-ink-secondary">Ingresos mes</span>
+              <span className="text-xs font-semibold text-ink-secondary">{allMonths ? 'Ingresos' : 'Ingresos mes'}</span>
             </div>
             <span className="text-sm font-bold text-status-good tabular-nums">+{formatCurrency(income)}</span>
           </div>
@@ -194,7 +244,7 @@ export function TransactionsPage() {
           <div className="flex items-center justify-between rounded-xl border border-rose-500/20 bg-rose-500/5 px-4 py-3">
             <div className="flex items-center gap-2">
               <TrendingDown className="size-4 text-rose-600" />
-              <span className="text-xs font-semibold text-ink-secondary">Gastos mes</span>
+              <span className="text-xs font-semibold text-ink-secondary">{allMonths ? 'Gastos' : 'Gastos mes'}</span>
             </div>
             <span className="text-sm font-bold text-rose-600 tabular-nums">−{formatCurrency(expense)}</span>
           </div>
@@ -210,6 +260,12 @@ export function TransactionsPage() {
             </span>
           </div>
         </div>
+      )}
+
+      {items.length > 0 && items.length < total && (
+        <p className="-mt-3 text-xs text-ink-muted">
+          Los totales suman solo los {items.length} movimientos cargados de {total}. Carga más para completarlos.
+        </p>
       )}
 
       {listError && <ErrorBanner message={listError} onRetry={refresh} />}
@@ -238,7 +294,7 @@ export function TransactionsPage() {
           {groups.map(([date, txs]) => (
             <div key={date}>
               <div className="sticky top-0 z-10 border-b border-hairline bg-slate-50/90 px-4 py-2 text-xs font-bold text-ink-secondary uppercase tracking-wider backdrop-blur-xs">
-                {formatLongDate(date)}
+                {formatLongDate(date, allMonths)}
               </div>
               <ul className="divide-y divide-hairline">
                 {txs.map((tx) => (
@@ -278,9 +334,18 @@ export function TransactionsPage() {
           onClose={() => setEditing(null)}
           onSaved={(savedDate) => {
             setEditing(null)
-            const savedMonth = savedDate?.slice(0, 7)
-            if (savedMonth && savedMonth !== month) setMonth(savedMonth)
-            else refresh()
+            afterSave(savedDate)
+          }}
+        />
+      )}
+
+      {transferring && (
+        <TransferFormModal
+          accounts={accounts}
+          onClose={() => setTransferring(false)}
+          onSaved={(savedDate) => {
+            setTransferring(false)
+            afterSave(savedDate)
           }}
         />
       )}

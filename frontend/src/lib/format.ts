@@ -31,14 +31,22 @@ export function formatDate(isoDate: string): string {
   return new Date(year!, m! - 1, d).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })
 }
 
-/** "2026-10-16" -> "jueves, 16 de octubre". */
-export function formatLongDate(isoDate: string): string {
+/** "2026-10-16" -> "jueves, 16 de octubre" (con withYear: "... de octubre de 2026"). */
+export function formatLongDate(isoDate: string, withYear = false): string {
   const [year, m, d] = isoDate.split('-').map(Number)
   return new Date(year!, m! - 1, d).toLocaleDateString(LOCALE, {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
+    ...(withYear && { year: 'numeric' }),
   })
+}
+
+/** Desplaza un mes "YYYY-MM" en `delta` meses (puede cruzar de año). */
+export function shiftMonth(month: string, delta: number): string {
+  const [year, m] = month.split('-').map(Number)
+  const date = new Date(year!, m! - 1 + delta, 1)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
 export function formatDateTime(iso: string): string {
