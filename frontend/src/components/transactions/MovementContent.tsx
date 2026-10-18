@@ -3,29 +3,49 @@ import { describeMovement } from './transfer'
 
 type Movement = Parameters<typeof describeMovement>[0] & { amount: number; date: string }
 
-/** Contenido de una fila de movimiento (icono, título, detalle e importe). */
+/** Contenido estilizado de una fila de movimiento (icono con color temático, detalle e importe). */
 export function MovementContent({ tx, showDate = false }: { tx: Movement; showDate?: boolean }) {
   const { icon: Icon, title, detail, tag } = describeMovement(tx)
-  const sign = tx.type === 'income' ? '+' : '−'
+  const isIncome = tx.type === 'income'
+
+  // Tema de color según tipo de movimiento
+  let iconTheme = 'bg-slate-100 text-slate-600 border border-slate-200'
+  let amountTheme = 'text-ink'
+
+  if (isIncome) {
+    iconTheme = 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+    amountTheme = 'text-status-good font-bold'
+  } else if (tx.savings_goal) {
+    iconTheme = 'bg-cyan-500/10 text-cyan-600 border border-cyan-500/20'
+  } else if (tx.transfer_id) {
+    iconTheme = 'bg-blue-500/10 text-brand border border-brand/20'
+  } else {
+    iconTheme = 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
+  }
+
+  const sign = isIncome ? '+' : '−'
 
   return (
     <>
-      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink/5 text-ink-secondary">
+      <span className={`grid size-9.5 shrink-0 place-items-center rounded-xl ${iconTheme} shadow-2xs`}>
         <Icon className="size-4" aria-hidden />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{title}</span>
+        <span className="block truncate text-sm font-semibold text-ink">{title}</span>
         <span className="block truncate text-xs text-ink-muted">
           {showDate && `${formatDate(tx.date)} · `}
           {detail}
         </span>
       </span>
-      <span className="text-right">
-        <span className={`block text-sm font-semibold tabular-nums ${tag ? 'text-ink-secondary' : ''}`}>
-          {sign}
-          {formatCurrency(Number(tx.amount))}
+      <span className="text-right shrink-0">
+        <span className={`block text-sm font-semibold tabular-nums ${amountTheme}`}>
+          {sign} {formatCurrency(Number(tx.amount))}
         </span>
-        {tag && <span className="block text-[11px] text-ink-muted">{tag}</span>}
+        {tag && (
+          <span className="inline-block rounded-md bg-slate-100 px-1.5 py-0.2 text-[10px] font-medium text-ink-secondary mt-0.5">
+            {tag}
+          </span>
+        )}
       </span>
     </>
   )

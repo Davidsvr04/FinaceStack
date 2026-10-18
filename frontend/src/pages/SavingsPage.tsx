@@ -1,11 +1,20 @@
-import { AlertTriangle, CheckCircle2, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  Calendar,
+  CheckCircle2,
+  Minus,
+  Pencil,
+  PiggyBank,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
+import { StatCard } from '../components/dashboard/StatCard'
 import { EmptyState } from '../components/EmptyState'
 import { Spinner } from '../components/Spinner'
 import {
   Button,
-  Card,
   ErrorBanner,
   Field,
   FormError,
@@ -56,14 +65,15 @@ export function SavingsPage() {
 
   const totalSaved = goals?.reduce((s, g) => s + Number(g.current_amount), 0) ?? 0
   const totalTarget = goals?.reduce((s, g) => s + Number(g.target_amount), 0) ?? 0
+  const globalProgress = totalTarget > 0 ? totalSaved / totalTarget : 0
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Metas de ahorro"
-        subtitle={goals?.length ? `${formatCurrency(totalSaved)} ahorrados de ${formatCurrency(totalTarget)}` : undefined}
+        title="Metas de Ahorro"
+        subtitle="Construye tu fondo de emergencia, viajes y metas futuras con apartados dedicados"
         actions={
-          <Button onClick={() => setDialog({ kind: 'goal' })}>
+          <Button onClick={() => setDialog({ kind: 'goal' })} className="shadow-xs">
             <Plus className="size-4" aria-hidden />
             Nueva meta
           </Button>
@@ -72,22 +82,50 @@ export function SavingsPage() {
 
       {error && <ErrorBanner message={error} onRetry={reload} />}
       {del.error && <ErrorBanner message={del.error} />}
-      {loading && !goals && <Spinner />}
-      {goals && goals.length === 0 && <EmptyState text="Crea una meta para empezar a ahorrar con un objetivo" />}
+      {loading && !goals && (
+        <div className="grid h-48 place-items-center">
+          <Spinner label="Cargando tus metas de ahorro…" />
+        </div>
+      )}
+
+      {goals && goals.length === 0 && (
+        <EmptyState
+          title="No tienes metas de ahorro activas"
+          text="Define tu primer objetivo financiero (por ejemplo, vacaciones o fondo para emergencias) y abona dinero cuando quieras."
+          action={
+            <Button onClick={() => setDialog({ kind: 'goal' })}>
+              <Plus className="size-4" />
+              Crear mi primera meta
+            </Button>
+          }
+        />
+      )}
 
       {goals && goals.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {goals.map((goal) => (
-            <GoalCard
-              key={goal.id}
-              goal={goal}
-              onDeposit={() => setDialog({ kind: 'deposit', goal })}
-              onWithdraw={() => setDialog({ kind: 'withdraw', goal })}
-              onEdit={() => setDialog({ kind: 'goal', goal })}
-              onDelete={() => handleDelete(goal)}
+        <>
+          <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StatCard label="Total ahorrado" value={formatCurrency(totalSaved)} hint="En todas tus metas" />
+            <StatCard label="Objetivo acumulado" value={formatCurrency(totalTarget)} hint="Suma total proyectada" />
+            <StatCard
+              label="Progreso global"
+              value={formatPercent(globalProgress)}
+              hint={`${goals.filter((g) => Number(g.progress) >= 1).length} de ${goals.length} metas cumplidas`}
             />
-          ))}
-        </div>
+          </section>
+
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {goals.map((goal) => (
+              <GoalCard
+                key={goal.id}
+                goal={goal}
+                onDeposit={() => setDialog({ kind: 'deposit', goal })}
+                onWithdraw={() => setDialog({ kind: 'withdraw', goal })}
+                onEdit={() => setDialog({ kind: 'goal', goal })}
+                onDelete={() => handleDelete(goal)}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {dialog?.kind === 'goal' && <GoalFormModal goal={dialog.goal} onClose={close} onSaved={saved} />}
@@ -112,64 +150,102 @@ function GoalCard({ goal, onDeposit, onWithdraw, onEdit, onDelete }: GoalCardPro
   const remaining = Math.max(0, target - current)
   const done = remaining === 0
   const days = goal.deadline ? daysUntil(goal.deadline) : null
-  // Cuánto habría que ahorrar por mes para llegar a tiempo.
   const monthsLeft = days !== null && days > 0 ? Math.max(1, Math.ceil(days / 30)) : null
   const perMonth = monthsLeft && !done ? remaining / monthsLeft : null
 
   return (
-    <Card className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h2 className="truncate font-semibold">{goal.name}</h2>
-          {goal.deadline && (
-            <p className="text-xs text-ink-muted">
-              {formatDate(goal.deadline)} ·{' '}
-              {days! > 0 ? `faltan ${days} días` : days === 0 ? 'vence hoy' : `venció hace ${-days!} días`}
+    <div className="card-hover-effect flex flex-col justify-between rounded-2xl border border-hairline bg-surface p-5 shadow-xs">
+      <div>
+        {/* Cabecera de la meta */}
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`grid size-10 shrink-0 place-items-center rounded-xl border ${done
+                ? 'bg-emerald-500/10 text-status-good border-emerald-500/20'
+                : 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20'
+              }`}>
+              <PiggyBank className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-bold text-ink">{goal.name}</h2>
+              {goal.deadline ? (
+                <p className="flex items-center gap-1 text-xs text-ink-muted mt-0.5">
+                  <Calendar className="size-3" />
+                  <span>{formatDate(goal.deadline)}</span>
+                  <span>·</span>
+                  <span className={days! <= 7 && !done ? 'text-amber-600 font-semibold' : ''}>
+                    {days! > 0 ? `faltan ${days} días` : days === 0 ? 'vence hoy' : `venció hace ${-days!} días`}
+                  </span>
+                </p>
+              ) : (
+                <p className="text-xs text-ink-muted">Sin fecha límite</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex shrink-0">
+            <IconButton label={`Editar ${goal.name}`} onClick={onEdit} className="hover:text-brand hover:bg-brand/10">
+              <Pencil className="size-4" aria-hidden />
+            </IconButton>
+            <IconButton label={`Eliminar ${goal.name}`} onClick={onDelete} className="hover:text-status-critical hover:bg-status-critical/10">
+              <Trash2 className="size-4" aria-hidden />
+            </IconButton>
+          </div>
+        </div>
+
+        {/* Métricas y Progreso */}
+        <div className="my-4 rounded-xl bg-slate-50 p-3.5 border border-hairline/60">
+          <div className="flex items-baseline justify-between gap-2">
+            <div>
+              <span className="text-xs font-semibold text-ink-muted block uppercase tracking-wider">Ahorrado</span>
+              <span className="text-xl font-extrabold tracking-tight text-ink tabular-nums">
+                {formatCurrency(current)}
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-semibold text-ink-muted block uppercase tracking-wider">Meta</span>
+              <span className="text-sm font-semibold text-ink-secondary tabular-nums">
+                {formatCurrency(target)}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <ProgressBar
+              value={Number(goal.progress)}
+              label={`Progreso de ${goal.name}`}
+              color={done ? 'var(--color-status-good)' : 'var(--color-brand)'}
+            />
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between text-xs">
+            <span className={`inline-flex items-center gap-1 font-semibold ${done ? 'text-status-good' : 'text-brand'}`}>
+              {done ? (
+                <>
+                  <CheckCircle2 className="size-3.5 text-status-good" aria-hidden />
+                  Meta 100% cumplida
+                </>
+              ) : (
+                formatPercent(Number(goal.progress))
+              )}
+            </span>
+            {!done && (
+              <span className="text-ink-muted tabular-nums">
+                Faltan {formatCurrency(remaining)}
+              </span>
+            )}
+          </div>
+
+          {perMonth !== null && !done && (
+            <p className="mt-2 text-[11px] font-medium text-ink-secondary pt-2 border-t border-hairline/60">
+              Ahorro sugerido: <span className="font-bold text-ink">{formatCurrency(perMonth)}/mes</span>
             </p>
           )}
         </div>
-        <div className="flex shrink-0">
-          <IconButton label={`Editar ${goal.name}`} onClick={onEdit}>
-            <Pencil className="size-4" aria-hidden />
-          </IconButton>
-          <IconButton label={`Eliminar ${goal.name}`} onClick={onDelete}>
-            <Trash2 className="size-4" aria-hidden />
-          </IconButton>
-        </div>
       </div>
 
-      <div>
-        <div className="mb-1.5 flex items-baseline justify-between gap-2">
-          <span className="text-xl font-semibold tracking-tight">{formatCurrency(current)}</span>
-          <span className="text-sm text-ink-secondary">de {formatCurrency(target)}</span>
-        </div>
-        <ProgressBar
-          value={Number(goal.progress)}
-          label={`Progreso de ${goal.name}`}
-          color={done ? 'var(--color-status-good)' : undefined}
-        />
-        <p className="mt-1.5 flex items-center gap-1.5 text-xs text-ink-secondary">
-          {done ? (
-            <>
-              <CheckCircle2 className="size-3.5 text-status-good" aria-hidden />
-              Meta cumplida
-            </>
-          ) : (
-            <>
-              {formatPercent(Number(goal.progress))} · faltan {formatCurrency(remaining)}
-              {perMonth !== null && ` · ${formatCurrency(perMonth)}/mes`}
-            </>
-          )}
-        </p>
-        {Number(goal.initial_amount) > 0 && (
-          <p className="mt-1 text-xs text-ink-muted">
-            Incluye {formatCurrency(Number(goal.initial_amount))} de ahorro previo
-          </p>
-        )}
-      </div>
-
-      <div className="mt-auto flex gap-2">
-        <Button onClick={onDeposit} className="flex-1">
+      {/* Botones de acción */}
+      <div className="flex gap-2.5 pt-2">
+        <Button onClick={onDeposit} className="flex-1 shadow-xs">
           <Plus className="size-4" aria-hidden />
           Abonar
         </Button>
@@ -178,7 +254,7 @@ function GoalCard({ goal, onDeposit, onWithdraw, onEdit, onDelete }: GoalCardPro
           Retirar
         </Button>
       </div>
-    </Card>
+    </div>
   )
 }
 
@@ -205,15 +281,15 @@ function GoalFormModal({ goal, onClose, onSaved }: { goal?: SavingsGoal; onClose
   }
 
   return (
-    <Modal title={goal ? 'Editar meta' : 'Nueva meta de ahorro'} onClose={onClose}>
+    <Modal title={goal ? 'Editar meta de ahorro' : 'Nueva meta de ahorro'} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Nombre">
+        <Field label="Nombre del objetivo">
           <input
             required
             maxLength={80}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Fondo de emergencia"
+            placeholder="Ej. Vacaciones fin de año"
             className={inputClass}
             autoFocus
           />
@@ -227,6 +303,7 @@ function GoalFormModal({ goal, onClose, onSaved }: { goal?: SavingsGoal; onClose
             inputMode="decimal"
             value={target}
             onChange={(e) => setTarget(e.target.value)}
+            placeholder="0.00"
             className={inputClass}
           />
         </Field>
@@ -235,12 +312,12 @@ function GoalFormModal({ goal, onClose, onSaved }: { goal?: SavingsGoal; onClose
         </Field>
         <Field
           label="Ahorro previo (opcional)"
-          hint="Lo que ya tenías ahorrado antes de usar la app. Suma a la meta sin descontarse de ninguna cuenta ni aparecer en Movimientos. Si ese dinero está incluido en el saldo de una cuenta que registraste, déjalo en 0 y usa «Abonar» desde esa cuenta para no contarlo dos veces."
+          hint="Dinero que ya tenías guardado antes de registrarte en la plataforma."
         >
           <input
             type="number"
             step="0.01"
-            min="0"
+            min="0.01"
             inputMode="decimal"
             value={initial}
             onChange={(e) => setInitial(e.target.value)}
@@ -254,7 +331,7 @@ function GoalFormModal({ goal, onClose, onSaved }: { goal?: SavingsGoal; onClose
             Cancelar
           </Button>
           <Button type="submit" disabled={submitting}>
-            {submitting ? 'Guardando…' : 'Guardar'}
+            {submitting ? 'Guardando…' : 'Guardar meta'}
           </Button>
         </ModalActions>
       </form>
@@ -265,7 +342,6 @@ function GoalFormModal({ goal, onClose, onSaved }: { goal?: SavingsGoal; onClose
 interface ContributionModalProps {
   goal: SavingsGoal
   mode: 'deposit' | 'withdraw'
-  /** Cuentas bancarias o de efectivo. */
   accounts: Account[]
   onClose: () => void
   onSaved: () => void
@@ -301,7 +377,7 @@ function ContributionModal({ goal, mode, accounts, onClose, onSaved }: Contribut
       <Modal title={title} onClose={onClose}>
         <p className="text-sm text-ink-secondary">
           Necesitas una cuenta bancaria o de efectivo {isDeposit ? 'desde la cual ahorrar' : 'a la cual devolver el dinero'}.{' '}
-          <Link to="/cuentas" className="font-medium text-brand-strong hover:underline">
+          <Link to="/cuentas" className="font-semibold text-brand hover:underline">
             Crear cuenta
           </Link>
         </p>
@@ -331,13 +407,14 @@ function ContributionModal({ goal, mode, accounts, onClose, onSaved }: Contribut
             inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            placeholder="0.00"
             className={inputClass}
             autoFocus
           />
         </Field>
         {exceedsBalance && (
-          <p className="flex items-start gap-1.5 text-xs text-ink-secondary">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-status-warning" aria-hidden />
+          <p className="flex items-start gap-1.5 text-xs text-amber-700 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-600" aria-hidden />
             El monto supera el saldo de la cuenta; quedará en negativo.
           </p>
         )}
@@ -346,9 +423,8 @@ function ContributionModal({ goal, mode, accounts, onClose, onSaved }: Contribut
         </Field>
         <p className="text-xs text-ink-muted">
           {isDeposit
-            ? 'El dinero se descuenta del saldo de la cuenta y queda apartado en la meta. No cuenta como gasto.'
-            : 'El dinero sale de la meta y vuelve al saldo de la cuenta. No cuenta como ingreso.'}{' '}
-          Quedará registrado en Movimientos.
+            ? 'El dinero se descuenta del saldo de la cuenta y queda apartado en la meta.'
+            : 'El dinero sale de la meta y vuelve al saldo de la cuenta disponible.'}
         </p>
         <FormError message={error} />
         <ModalActions>
@@ -356,7 +432,7 @@ function ContributionModal({ goal, mode, accounts, onClose, onSaved }: Contribut
             Cancelar
           </Button>
           <Button type="submit" disabled={submitting}>
-            {submitting ? 'Guardando…' : isDeposit ? 'Abonar' : 'Retirar'}
+            {submitting ? 'Guardando…' : isDeposit ? 'Abonar a la meta' : 'Retirar fondos'}
           </Button>
         </ModalActions>
       </form>

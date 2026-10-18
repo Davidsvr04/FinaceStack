@@ -37,9 +37,9 @@ export function AccountsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Cuentas"
-        subtitle="Bancos, efectivo y tarjetas de crédito"
+        subtitle="Administra tus bancos, billeteras de efectivo y tarjetas de crédito"
         actions={
-          <Button onClick={() => setEditing('new')}>
+          <Button onClick={() => setEditing('new')} className="shadow-xs">
             <Plus className="size-4" aria-hidden />
             Nueva cuenta
           </Button>
@@ -48,21 +48,51 @@ export function AccountsPage() {
 
       {error && <ErrorBanner message={error} onRetry={reload} />}
       {del.error && <ErrorBanner message={del.error} />}
-      {loading && !accounts && <Spinner />}
+      {loading && !accounts && (
+        <div className="grid h-48 place-items-center">
+          <Spinner label="Cargando tus cuentas…" />
+        </div>
+      )}
 
       {accounts && accounts.length === 0 && (
-        <EmptyState text="Crea tu primera cuenta para empezar a registrar movimientos" />
+        <EmptyState
+          title="No tienes cuentas registradas"
+          text="Crea tu primera cuenta bancaria o billetera para empezar a registrar movimientos y llevar tus finanzas al día."
+          action={
+            <Button onClick={() => setEditing('new')}>
+              <Plus className="size-4" />
+              Crear mi primera cuenta
+            </Button>
+          }
+        />
       )}
 
       {accounts && accounts.length > 0 && (
         <>
-          <section className="grid grid-cols-2 gap-3">
-            <StatCard label="Saldo disponible" value={formatCurrency(available)} hint="Bancos y efectivo" />
-            <StatCard label="Deuda en tarjetas" value={formatCurrency(debt)} />
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <StatCard label="Saldo disponible" value={formatCurrency(available)} hint="En cuentas de ahorro y efectivo" />
+            <StatCard label="Deuda en tarjetas" value={formatCurrency(debt)} hint="Saldo total adeudado a la fecha" />
           </section>
 
-          {liquid.length > 0 && <AccountList title="Bancos y efectivo" accounts={liquid} onEdit={setEditing} onDelete={handleDelete} />}
-          {cards.length > 0 && <AccountList title="Tarjetas de crédito" accounts={cards} onEdit={setEditing} onDelete={handleDelete} />}
+          {liquid.length > 0 && (
+            <AccountList
+              title="Bancos y efectivo"
+              subtitle={`${liquid.length} cuenta${liquid.length > 1 ? 's' : ''} activa${liquid.length > 1 ? 's' : ''}`}
+              accounts={liquid}
+              onEdit={setEditing}
+              onDelete={handleDelete}
+            />
+          )}
+
+          {cards.length > 0 && (
+            <AccountList
+              title="Tarjetas de crédito"
+              subtitle={`${cards.length} tarjeta${cards.length > 1 ? 's' : ''} vinculada${cards.length > 1 ? 's' : ''}`}
+              accounts={cards}
+              onEdit={setEditing}
+              onDelete={handleDelete}
+            />
+          )}
         </>
       )}
 
@@ -82,40 +112,74 @@ export function AccountsPage() {
 
 interface AccountListProps {
   title: string
+  subtitle?: string
   accounts: Account[]
   onEdit: (account: Account) => void
   onDelete: (account: Account) => void
 }
 
-function AccountList({ title, accounts, onEdit, onDelete }: AccountListProps) {
+function AccountList({ title, subtitle, accounts, onEdit, onDelete }: AccountListProps) {
   return (
     <Card>
-      <h2 className="mb-1 font-semibold">{title}</h2>
+      <div className="mb-4 flex items-center justify-between border-b border-hairline/60 pb-3">
+        <div>
+          <h2 className="font-bold tracking-tight text-ink">{title}</h2>
+          {subtitle && <p className="text-xs text-ink-muted">{subtitle}</p>}
+        </div>
+      </div>
       <ul className="divide-y divide-hairline">
         {accounts.map((account) => {
           const { label, icon: Icon } = ACCOUNT_TYPES[account.type]
           const balance = Number(account.balance)
           const isCard = account.type === 'credit_card'
+
+          let iconStyle = 'bg-brand/10 text-brand border-brand/20'
+          if (account.type === 'cash') iconStyle = 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+          if (isCard) iconStyle = 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20'
+
           return (
-            <li key={account.id} className="flex items-center gap-3 py-3">
-              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink/5 text-ink-secondary">
-                <Icon className="size-4" aria-hidden />
+            <li
+              key={account.id}
+              className="group -mx-2 flex items-center gap-3.5 rounded-xl px-2 py-3 transition-colors hover:bg-ink/[0.02]"
+            >
+              <span className={`grid size-10 shrink-0 place-items-center rounded-xl border ${iconStyle} shadow-2xs`}>
+                <Icon className="size-5" aria-hidden />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{account.name}</p>
+                <p className="truncate text-sm font-semibold text-ink">{account.name}</p>
                 <p className="text-xs text-ink-muted">{label}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm font-semibold tabular-nums">
+                <p className="text-sm font-bold tabular-nums text-ink">
                   {formatCurrency(isCard ? Math.abs(balance) : balance)}
                 </p>
-                {isCard && <p className="text-xs text-ink-muted">{balance > 0 ? 'saldo a favor' : 'deuda'}</p>}
+                {isCard && (
+                  <span
+                    className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      balance > 0
+                        ? 'bg-status-good/10 text-status-good'
+                        : balance < 0
+                          ? 'bg-status-critical/10 text-status-critical'
+                          : 'bg-slate-100 text-ink-muted'
+                    }`}
+                  >
+                    {balance > 0 ? 'Saldo a favor' : balance < 0 ? 'Deuda' : 'Al día ($0)'}
+                  </span>
+                )}
               </div>
-              <div className="flex">
-                <IconButton label={`Editar ${account.name}`} onClick={() => onEdit(account)}>
+              <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100">
+                <IconButton
+                  label={`Editar ${account.name}`}
+                  onClick={() => onEdit(account)}
+                  className="hover:text-brand hover:bg-brand/10"
+                >
                   <Pencil className="size-4" aria-hidden />
                 </IconButton>
-                <IconButton label={`Eliminar ${account.name}`} onClick={() => onDelete(account)}>
+                <IconButton
+                  label={`Eliminar ${account.name}`}
+                  onClick={() => onDelete(account)}
+                  className="hover:text-status-critical hover:bg-status-critical/10"
+                >
                   <Trash2 className="size-4" aria-hidden />
                 </IconButton>
               </div>
