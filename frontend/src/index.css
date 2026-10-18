@@ -1,24 +1,94 @@
 @import "tailwindcss";
 
-/* Tokens de la interfaz y de los gráficos (paleta validada para daltonismo). */
+/* Tokens de la interfaz con paleta Fintech moderna, contrastada y limpia */
 @theme {
-  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, "Segoe UI", sans-serif;
 
-  --color-page: #f9f9f7;
-  --color-surface: #fcfcfb;
-  --color-ink: #0b0b0b;
-  --color-ink-secondary: #52514e;
-  --color-ink-muted: #898781;
-  --color-hairline: #e1e0d9;
+  --color-page: #f8fafc;
+  --color-surface: #ffffff;
+  --color-ink: #0f172a;
+  --color-ink-secondary: #475569;
+  --color-ink-muted: #94a3b8;
+  --color-hairline: #e2e8f0;
 
-  --color-brand: #2a78d6;
-  --color-brand-strong: #1c5cab;
+  --color-brand: #2563eb;
+  --color-brand-strong: #1d4ed8;
 
-  --color-status-good: #0ca30c;
-  --color-status-warning: #fab219;
-  --color-status-critical: #d03b3b;
+  --color-status-good: #10b981;
+  --color-status-warning: #f59e0b;
+  --color-status-critical: #ef4444;
 }
 
 body {
   @apply bg-page text-ink antialiased;
+  font-family: var(--font-sans);
+  background-color: var(--color-page);
+  color: var(--color-ink);
+}
+
+/* Scrollbar estilizada y moderna */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Animaciones suaves */
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes float-reverse {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.05);
+  }
+}
+
+.animate-float-slow {
+  animation: float-slow 7s ease-in-out infinite;
+}
+
+.animate-float-reverse {
+  animation: float-reverse 8s ease-in-out infinite;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 6s ease-in-out infinite;
+}
+
+/* Efectos de elevación sutil para tarjetas interactivas */
+.card-hover-effect {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-hover-effect:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
 }
