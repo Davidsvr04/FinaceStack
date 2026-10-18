@@ -7,12 +7,18 @@ import { dbError, getCtx, isoDate, money, parse, uuidParam } from '../lib/http.j
 // Aquí viven las vistas y operaciones específicas de tarjetas.
 const router = Router()
 
-const paymentSchema = z.object({
-  from_account_id: z.uuid(),
-  amount: money,
-  date: isoDate.optional(),
-  description: z.string().trim().max(255).optional(),
-})
+// El pago sale de una cuenta (banco/efectivo) o de una meta de ahorro, nunca de ambas.
+const paymentSchema = z
+  .object({
+    from_account_id: z.uuid().optional(),
+    from_goal_id: z.uuid().optional(),
+    amount: money,
+    date: isoDate.optional(),
+    description: z.string().trim().max(255).optional(),
+  })
+  .refine((p) => Boolean(p.from_account_id) !== Boolean(p.from_goal_id), {
+    message: 'Indica de dónde sale el pago: una cuenta o una meta de ahorro',
+  })
 
 const simulateSchema = z.object({
   monthly_payment: money,
@@ -84,16 +90,29 @@ router.post('/:id/payments', async (req, res) => {
   const { id } = parse(uuidParam, req.params)
   const input = parse(paymentSchema, req.body)
 
-  const { data: transferId, error } = await supabase.rpc('pay_credit_card', {
-    p_card_id: id,
-    p_from_account_id: input.from_account_id,
-    p_amount: input.amount,
+  const optional = {
     ...(input.date && { p_date: input.date }),
     ...(input.description && { p_description: input.description }),
-  })
+  }
+
+  // Desde una meta: un solo movimiento en la tarjeta enlazado a la meta (baja la
+  // deuda y lo ahorrado). Desde una cuenta: transferencia entre las dos cuentas.
+  const { data: result, error } = input.from_goal_id
+    ? await supabase.rpc('pay_credit_card_from_goal', {
+        p_card_id: id,
+        p_goal_id: input.from_goal_id,
+        p_amount: input.amount,
+        ...optional,
+      })
+    : await supabase.rpc('pay_credit_card', {
+        p_card_id: id,
+        p_from_account_id: input.from_account_id!,
+        p_amount: input.amount,
+        ...optional,
+      })
 
   if (error) throw dbError(error)
-  res.status(201).json({ transfer_id: transferId })
+  res.status(201).json({ transfer_id: result })
 })
 
 /** Simula cuántos meses toma saldar la deuda con una cuota fija. */

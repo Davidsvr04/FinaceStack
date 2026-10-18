@@ -9,6 +9,7 @@ import categories from './routes/categories.js'
 import creditCards from './routes/credit-cards.js'
 import dashboard from './routes/dashboard.js'
 import savings from './routes/savings.js'
+import templates from './routes/templates.js'
 import transactions from './routes/transactions.js'
 
 // Falla al cargar si falta configuración de Supabase, en lugar de en la primera petición.
@@ -30,6 +31,7 @@ api.use(requireUser)
 api.use('/accounts', accounts)
 api.use('/categories', categories)
 api.use('/transactions', transactions)
+api.use('/templates', templates)
 api.use('/savings-goals', savings)
 api.use('/credit-cards', creditCards)
 api.use('/dashboard', dashboard)

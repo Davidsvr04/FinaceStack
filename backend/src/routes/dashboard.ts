@@ -49,7 +49,7 @@ router.get('/summary', async (req, res) => {
     supabase
       .from('transactions')
       .select(
-        'id, type, amount, date, description, transfer_id, category:categories(name), account:accounts(name), savings_goal:savings_goals(name)',
+        'id, type, amount, date, description, transfer_id, category:categories(name), account:accounts(name, type), savings_goal:savings_goals(name)',
       )
       .or(ONE_ROW_PER_TRANSFER)
       .order('date', { ascending: false })

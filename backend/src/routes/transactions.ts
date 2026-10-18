@@ -20,6 +20,15 @@ const createSchema = z.object({
   installments: z.coerce.number().int().min(1).max(48).optional(),
 })
 
+// Pasar dinero entre dos cuentas propias (banco/efectivo): no es ingreso ni gasto.
+const transferSchema = z.object({
+  from_account_id: z.uuid(),
+  to_account_id: z.uuid(),
+  amount: money,
+  date: isoDate.optional(),
+  description: z.string().trim().max(255).optional(),
+})
+
 const listSchema = z.object({
   from: isoDate.optional(),
   to: isoDate.optional(),
@@ -78,6 +87,22 @@ async function withCounterparts<T extends { id: string; transfer_id: string | nu
       legs.find((leg) => leg.transfer_id === row.transfer_id && leg.id !== row.id)?.account ?? null,
   }))
 }
+
+router.post('/transfer', async (req, res) => {
+  const { supabase } = getCtx(req)
+  const input = parse(transferSchema, req.body)
+
+  const { data: transferId, error } = await supabase.rpc('transfer_between_accounts', {
+    p_from_account_id: input.from_account_id,
+    p_to_account_id: input.to_account_id,
+    p_amount: input.amount,
+    ...(input.date && { p_date: input.date }),
+    ...(input.description && { p_description: input.description }),
+  })
+
+  if (error) throw dbError(error)
+  res.status(201).json({ transfer_id: transferId })
+})
 
 router.post('/', async (req, res) => {
   const { supabase, userId } = getCtx(req)
