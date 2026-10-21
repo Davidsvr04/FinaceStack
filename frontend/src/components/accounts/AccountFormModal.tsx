@@ -3,7 +3,7 @@ import { useSubmit } from '../../hooks/useSubmit'
 import { send } from '../../lib/api'
 import { formatCurrency, formatDate, nextOccurrence, optionalNumber, todayISO } from '../../lib/format'
 import { ACCOUNT_TYPES, INSTALLMENT_OPTIONS } from '../../lib/labels'
-import type { Account, AccountType, CreditCard } from '../../types'
+import type { Account, AccountType, CreditCard, Currency } from '../../types'
 import { Button, Field, FormError, inputClass, Modal, ModalActions } from '../ui'
 
 interface Props {
@@ -12,14 +12,27 @@ interface Props {
   defaultType?: AccountType
   /** Oculta el selector de tipo (p. ej. desde la página de tarjetas). */
   lockType?: boolean
+  /** Moneda de la cuenta nueva (desde el apartado de dólares, USD). */
+  currency?: Currency
   onClose: () => void
   onSaved: () => void
 }
 
 const str = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n))
 
-export function AccountFormModal({ account, defaultType = 'bank', lockType = false, onClose, onSaved }: Props) {
+export function AccountFormModal({
+  account,
+  defaultType = 'bank',
+  lockType = false,
+  currency: newCurrency = 'COP',
+  onClose,
+  onSaved,
+}: Props) {
   const isEdit = Boolean(account)
+  const currency = account?.currency ?? newCurrency
+  const isUsd = currency === 'USD'
+  // Las tarjetas de crédito solo se manejan en pesos.
+  const typeOptions = Object.entries(ACCOUNT_TYPES).filter(([value]) => !isUsd || value !== 'credit_card')
   const [name, setName] = useState(account?.name ?? '')
   const [type, setType] = useState<AccountType>(account?.type ?? defaultType)
   const [initialBalance, setInitialBalance] = useState('')
@@ -81,6 +94,7 @@ export function AccountFormModal({ account, defaultType = 'bank', lockType = fal
         await send('POST', '/accounts', {
           name,
           type,
+          currency,
           initial_balance: optionalNumber(initialBalance) ?? 0,
           ...cardFields,
         })
@@ -90,10 +104,12 @@ export function AccountFormModal({ account, defaultType = 'bank', lockType = fal
   }
 
   const title = isEdit
-    ? `Editar ${isCard ? 'tarjeta' : 'cuenta'}`
+    ? `Editar ${isCard ? 'tarjeta' : isUsd ? 'cuenta en dólares' : 'cuenta'}`
     : isCard && lockType
       ? 'Nueva tarjeta de crédito'
-      : 'Nueva cuenta'
+      : isUsd
+        ? 'Nueva cuenta en dólares'
+        : 'Nueva cuenta'
 
   return (
     <Modal title={title} onClose={onClose}>
@@ -104,7 +120,7 @@ export function AccountFormModal({ account, defaultType = 'bank', lockType = fal
             maxLength={80}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={isCard ? 'Visa Bancolombia' : 'Cuenta de ahorros'}
+            placeholder={isCard ? 'Visa Bancolombia' : isUsd ? 'Cuenta en dólares' : 'Cuenta de ahorros'}
             className={inputClass}
             autoFocus
           />
@@ -113,7 +129,7 @@ export function AccountFormModal({ account, defaultType = 'bank', lockType = fal
         {!lockType && !isEdit && (
           <Field label="Tipo">
             <select value={type} onChange={(e) => setType(e.target.value as AccountType)} className={inputClass}>
-              {Object.entries(ACCOUNT_TYPES).map(([value, { label }]) => (
+              {typeOptions.map(([value, { label }]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
@@ -124,8 +140,14 @@ export function AccountFormModal({ account, defaultType = 'bank', lockType = fal
 
         {!isEdit && (
           <Field
-            label={isCard ? 'Deuda actual' : 'Saldo inicial'}
-            hint={isCard ? 'Lo que debes hoy en la tarjeta. Déjalo en 0 si está al día.' : undefined}
+            label={isCard ? 'Deuda actual' : isUsd ? 'Saldo inicial (US$)' : 'Saldo inicial'}
+            hint={
+              isCard
+                ? 'Lo que debes hoy en la tarjeta. Déjalo en 0 si está al día.'
+                : isUsd
+                  ? 'En dólares. La moneda de la cuenta no se puede cambiar después.'
+                  : undefined
+            }
           >
             <input
               type="number"

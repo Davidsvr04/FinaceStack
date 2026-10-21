@@ -40,7 +40,7 @@ export function MovementContent({ tx, showDate = false }: { tx: Movement; showDa
       </span>
       <span className="text-right shrink-0">
         <span className={`block text-sm font-semibold tabular-nums ${amountTheme}`}>
-          {sign} {formatCurrency(Number(tx.amount))}
+          {sign} {formatCurrency(Number(tx.amount), tx.account?.currency)}
         </span>
         {tag && (
           <span className="inline-block rounded-md bg-slate-100 px-1.5 py-0.2 text-[10px] font-medium text-ink-secondary mt-0.5">

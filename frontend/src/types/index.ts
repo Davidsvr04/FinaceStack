@@ -1,11 +1,15 @@
 export type Role = 'user' | 'admin'
 export type TransactionType = 'income' | 'expense'
 export type AccountType = 'bank' | 'cash' | 'credit_card'
+/** COP = pesos (lo de siempre); USD = dólares, en un apartado aparte. */
+export type Currency = 'COP' | 'USD'
 
 export interface Profile {
   id: string
   role: Role
   full_name: string | null
+  /** Activó el apartado de dólares. */
+  uses_usd: boolean
   created_at: string
 }
 
@@ -14,6 +18,8 @@ export interface Account {
   user_id: string
   name: string
   type: AccountType
+  /** Se fija al crear la cuenta. Las tarjetas siempre son COP. */
+  currency: Currency
   /** Con signo: en tarjetas, negativo = deuda. */
   balance: number
   credit_limit: number | null
@@ -84,11 +90,15 @@ export interface Transaction {
   savings_goal_id: string | null
   /** Compras con tarjeta: número de cuotas (1 = de contado). */
   installments: number
-  account: { id: string; name: string; type: AccountType } | null
+  /** Cambio de divisas: pesos por dólar (en ambas patas). null en el resto. */
+  exchange_rate: number | null
+  account: { id: string; name: string; type: AccountType; currency: Currency } | null
   category: { id: string; name: string; type: TransactionType } | null
   savings_goal: { id: string; name: string } | null
   /** La otra cuenta en una transferencia entre cuentas. */
-  counterpart_account: { id: string; name: string; type: AccountType } | null
+  counterpart_account: { id: string; name: string; type: AccountType; currency: Currency } | null
+  /** Monto de la otra pata (en un cambio de divisas, en la otra moneda). */
+  counterpart_amount: number | null
 }
 
 /** Plantilla de un movimiento frecuente (transporte, mercado...). */
@@ -102,7 +112,7 @@ export interface MovementTemplate {
   category_id: string | null
   description: string | null
   installments: number
-  account: { id: string; name: string; type: AccountType } | null
+  account: { id: string; name: string; type: AccountType; currency: Currency } | null
   category: { id: string; name: string; type: TransactionType } | null
 }
 
@@ -144,8 +154,9 @@ export interface RecentTransaction {
   date: string
   description: string | null
   transfer_id: string | null
+  exchange_rate: number | null
   category: { name: string } | null
-  account: { name: string } | null
+  account: { name: string; currency: Currency } | null
   savings_goal: { name: string } | null
 }
 
@@ -171,6 +182,21 @@ export interface DashboardSummary {
   trend: TrendPoint[]
   savings_goals: GoalSummary[]
   recent_transactions: RecentTransaction[]
+}
+
+/** Resumen del apartado de dólares (montos en USD salvo la tasa). */
+export interface UsdSummary {
+  month: string
+  balance: number
+  accounts: number
+  income: number
+  expense: number
+  net: number
+  /** Dólares comprados / vendidos en el mes. */
+  bought: number
+  sold: number
+  /** Pesos pagados por dólar en promedio, de todas las compras; null si no hay. */
+  average_purchase_rate: number | null
 }
 
 export interface TrendPoint {

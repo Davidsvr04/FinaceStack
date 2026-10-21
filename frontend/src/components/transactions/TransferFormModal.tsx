@@ -4,11 +4,13 @@ import { Link } from 'react-router'
 import { useSubmit } from '../../hooks/useSubmit'
 import { send } from '../../lib/api'
 import { formatCurrency, todayISO } from '../../lib/format'
-import type { Account } from '../../types'
+import type { Account, Currency } from '../../types'
 import { Button, Field, FormError, inputClass, Modal, ModalActions } from '../ui'
 
 interface Props {
   accounts: Account[]
+  /** Solo se transfiere entre cuentas de la misma moneda. */
+  currency?: Currency
   onClose: () => void
   /** savedDate: fecha de la transferencia, para mostrar el mes correcto. */
   onSaved: (savedDate: string) => void
@@ -18,8 +20,9 @@ interface Props {
  * Pasar dinero de una cuenta a otra (p. ej. de Bancolombia a Nu). Queda como
  * movimiento pero no es ingreso ni gasto. Las tarjetas se pagan desde Tarjetas.
  */
-export function TransferFormModal({ accounts, onClose, onSaved }: Props) {
-  const usable = accounts.filter((a) => a.type !== 'credit_card')
+export function TransferFormModal({ accounts, currency = 'COP', onClose, onSaved }: Props) {
+  const usable = accounts.filter((a) => a.type !== 'credit_card' && a.currency === currency)
+  const isUsd = currency === 'USD'
   const [fromId, setFromId] = useState(usable[0]?.id ?? '')
   const [toId, setToId] = useState(usable.find((a) => a.id !== usable[0]?.id)?.id ?? '')
   const [amount, setAmount] = useState('')
@@ -54,8 +57,9 @@ export function TransferFormModal({ accounts, onClose, onSaved }: Props) {
     return (
       <Modal title="Transferir entre cuentas" onClose={onClose}>
         <p className="text-sm text-ink-secondary">
-          Necesitas al menos dos cuentas bancarias o de efectivo para pasar dinero de una a otra.{' '}
-          <Link to="/cuentas" className="font-medium text-brand-strong hover:underline">
+          Necesitas al menos dos cuentas {isUsd ? 'en dólares' : 'bancarias o de efectivo'} para pasar dinero de una
+          a otra.{' '}
+          <Link to={isUsd ? '/dolares' : '/cuentas'} className="font-medium text-brand-strong hover:underline">
             Crear cuenta
           </Link>
         </p>
@@ -71,7 +75,7 @@ export function TransferFormModal({ accounts, onClose, onSaved }: Props) {
             <select required value={fromId} onChange={(e) => changeFrom(e.target.value)} className={inputClass}>
               {usable.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name} · {formatCurrency(Number(a.balance))}
+                  {a.name} · {formatCurrency(Number(a.balance), currency)}
                 </option>
               ))}
             </select>
@@ -83,14 +87,14 @@ export function TransferFormModal({ accounts, onClose, onSaved }: Props) {
                 .filter((a) => a.id !== fromId)
                 .map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name} · {formatCurrency(Number(a.balance))}
+                    {a.name} · {formatCurrency(Number(a.balance), currency)}
                   </option>
                 ))}
             </select>
           </Field>
         </div>
 
-        <Field label="Monto">
+        <Field label={isUsd ? 'Monto (US$)' : 'Monto'}>
           <input
             required
             type="number"

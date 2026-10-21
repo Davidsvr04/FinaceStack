@@ -6,6 +6,7 @@ import { AccountsPage } from './pages/AccountsPage'
 import { AdminPage } from './pages/AdminPage'
 import { CardsPage } from './pages/CardsPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { DollarsPage } from './pages/DollarsPage'
 import { LoginPage } from './pages/LoginPage'
 import { SavingsPage } from './pages/SavingsPage'
 import { TransactionsPage } from './pages/TransactionsPage'
@@ -20,10 +21,13 @@ export function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
-              <Route path="movimientos" element={<TransactionsPage />} />
+              {/* key: al pasar de pesos a dólares la página se reinicia (filtros, cuenta). */}
+              <Route path="movimientos" element={<TransactionsPage key="COP" />} />
               <Route path="cuentas" element={<AccountsPage />} />
               <Route path="ahorros" element={<SavingsPage />} />
               <Route path="tarjetas" element={<CardsPage />} />
+              <Route path="dolares" element={<DollarsPage />} />
+              <Route path="dolares/movimientos" element={<TransactionsPage key="USD" currency="USD" />} />
 
               <Route element={<ProtectedRoute requireAdmin />}>
                 <Route path="admin" element={<AdminPage />} />

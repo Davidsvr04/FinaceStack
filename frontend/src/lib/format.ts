@@ -1,11 +1,13 @@
+import type { Currency } from '../types'
+
 const LOCALE = 'es-CO'
 const CURRENCY = 'COP'
 
-const currency = new Intl.NumberFormat(LOCALE, {
-  style: 'currency',
-  currency: CURRENCY,
-  maximumFractionDigits: 0,
-})
+// Pesos sin decimales ($ 1.250.000); dólares con centavos (US$ 1.250,50).
+const currencyFormats: Record<Currency, Intl.NumberFormat> = {
+  COP: new Intl.NumberFormat(LOCALE, { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }),
+  USD: new Intl.NumberFormat(LOCALE, { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }),
+}
 
 const compactCurrency = new Intl.NumberFormat(LOCALE, {
   style: 'currency',
@@ -14,7 +16,7 @@ const compactCurrency = new Intl.NumberFormat(LOCALE, {
   maximumFractionDigits: 1,
 })
 
-export const formatCurrency = (value: number) => currency.format(value)
+export const formatCurrency = (value: number, currency: Currency = 'COP') => currencyFormats[currency].format(value)
 export const formatCompactCurrency = (value: number) => compactCurrency.format(value)
 export const formatPercent = (value: number, maxDecimals = 0) =>
   new Intl.NumberFormat(LOCALE, { style: 'percent', maximumFractionDigits: maxDecimals }).format(value)

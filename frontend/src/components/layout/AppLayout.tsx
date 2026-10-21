@@ -1,6 +1,7 @@
 import {
   ArrowLeftRight,
   CreditCard,
+  DollarSign,
   LayoutDashboard,
   LogOut,
   PiggyBank,
@@ -16,6 +17,8 @@ interface NavItem {
   label: string
   icon: LucideIcon
   adminOnly?: boolean
+  /** Solo para quien activó el apartado de dólares. */
+  usdOnly?: boolean
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -24,12 +27,15 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/cuentas', label: 'Cuentas', icon: Wallet },
   { to: '/ahorros', label: 'Ahorros', icon: PiggyBank },
   { to: '/tarjetas', label: 'Tarjetas', icon: CreditCard },
+  { to: '/dolares', label: 'Dólares', icon: DollarSign, usdOnly: true },
   { to: '/admin', label: 'Admin', icon: ShieldCheck, adminOnly: true },
 ]
 
 export function AppLayout() {
   const { profile, user, isAdmin, signOut } = useAuth()
-  const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
+  const items = NAV_ITEMS.filter(
+    (item) => (!item.adminOnly || isAdmin) && (!item.usdOnly || profile?.uses_usd),
+  )
   const displayName = profile?.full_name || user?.email || 'Usuario'
 
   // Iniciales para el avatar

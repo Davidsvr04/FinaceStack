@@ -11,12 +11,14 @@ import { Button, ErrorBanner, IconButton, inputClass, PageHeader } from '../comp
 import { useApi } from '../hooks/useApi'
 import { api } from '../lib/api'
 import { currentMonth, formatCurrency, formatLongDate, monthRange, shiftMonth } from '../lib/format'
-import type { Account, Category, Paginated, Transaction, TransactionKind } from '../types'
+import type { Account, Category, Currency, Paginated, Transaction, TransactionKind } from '../types'
 
 const PAGE_SIZE = 50
 
-export function TransactionsPage() {
-  const accountsQuery = useApi<Account[]>('/accounts')
+/** Movimientos en pesos (/movimientos) o del apartado de dólares (/dolares/movimientos). */
+export function TransactionsPage({ currency = 'COP' }: { currency?: Currency }) {
+  const isUsd = currency === 'USD'
+  const accountsQuery = useApi<Account[]>(`/accounts?currency=${currency}`)
   const categoriesQuery = useApi<Category[]>('/categories')
   const accounts = accountsQuery.data ?? []
   const categories = categoriesQuery.data ?? []
@@ -42,7 +44,7 @@ export function TransactionsPage() {
   const [transferring, setTransferring] = useState(false)
 
   const query = useMemo(() => {
-    const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
+    const params = new URLSearchParams({ currency, limit: String(PAGE_SIZE) })
     if (!allMonths) {
       const range = monthRange(month)
       params.set('from', range.from)
@@ -52,7 +54,7 @@ export function TransactionsPage() {
     if (accountId) params.set('account_id', accountId)
     if (categoryId) params.set('category_id', categoryId)
     return params.toString()
-  }, [allMonths, month, kind, accountId, categoryId])
+  }, [currency, allMonths, month, kind, accountId, categoryId])
 
   /** Tras guardar algo con fecha de otro mes, se muestra ese mes para que se vea. */
   function afterSave(savedDate?: string) {
@@ -115,9 +117,22 @@ export function TransactionsPage() {
 
   return (
     <div className="space-y-6">
+      {isUsd && (
+        <Link
+          to="/dolares"
+          className="-mb-3 inline-flex items-center gap-1 text-sm font-medium text-ink-secondary hover:text-ink"
+        >
+          <ChevronLeft className="size-4" aria-hidden />
+          Dólares
+        </Link>
+      )}
       <PageHeader
-        title="Movimientos"
-        subtitle="Monitorea tus ingresos, gastos diarios, pagos de tarjetas y transferencias"
+        title={isUsd ? 'Movimientos en dólares' : 'Movimientos'}
+        subtitle={
+          isUsd
+            ? 'Ingresos, gastos, transferencias y cambios de divisas de tus cuentas en dólares'
+            : 'Monitorea tus ingresos, gastos diarios, pagos de tarjetas y transferencias'
+        }
         actions={
           <>
             <Button variant="secondary" onClick={() => setTransferring(true)} disabled={!hasAccounts}>
@@ -136,8 +151,8 @@ export function TransactionsPage() {
         <div className="flex items-center gap-3 rounded-2xl border border-brand/30 bg-brand/5 p-4 text-sm text-ink">
           <Wallet className="size-5 text-brand shrink-0" />
           <p>
-            Para registrar movimientos primero necesitas crear una cuenta.{' '}
-            <Link to="/cuentas" className="font-semibold text-brand hover:underline">
+            Para registrar movimientos primero necesitas crear una cuenta{isUsd && ' en dólares'}.{' '}
+            <Link to={isUsd ? '/dolares' : '/cuentas'} className="font-semibold text-brand hover:underline">
               Crear cuenta aquí
             </Link>
           </p>
@@ -189,7 +204,9 @@ export function TransactionsPage() {
             <option value="">Todos los movimientos</option>
             <option value="income">Solo ingresos</option>
             <option value="expense">Solo gastos</option>
-            <option value="transfer">Transferencias, pagos a tarjeta y ahorros</option>
+            <option value="transfer">
+              {isUsd ? 'Transferencias y cambios de divisas' : 'Transferencias, pagos a tarjeta y ahorros'}
+            </option>
           </select>
           <select
             aria-label="Cuenta"
@@ -238,7 +255,7 @@ export function TransactionsPage() {
               <TrendingUp className="size-4 text-status-good" />
               <span className="text-xs font-semibold text-ink-secondary">{allMonths ? 'Ingresos' : 'Ingresos mes'}</span>
             </div>
-            <span className="text-sm font-bold text-status-good tabular-nums">+{formatCurrency(income)}</span>
+            <span className="text-sm font-bold text-status-good tabular-nums">+{formatCurrency(income, currency)}</span>
           </div>
 
           <div className="flex items-center justify-between rounded-xl border border-rose-500/20 bg-rose-500/5 px-4 py-3">
@@ -246,7 +263,7 @@ export function TransactionsPage() {
               <TrendingDown className="size-4 text-rose-600" />
               <span className="text-xs font-semibold text-ink-secondary">{allMonths ? 'Gastos' : 'Gastos mes'}</span>
             </div>
-            <span className="text-sm font-bold text-rose-600 tabular-nums">−{formatCurrency(expense)}</span>
+            <span className="text-sm font-bold text-rose-600 tabular-nums">−{formatCurrency(expense, currency)}</span>
           </div>
 
           <div className="flex items-center justify-between rounded-xl border border-hairline bg-surface px-4 py-3 shadow-xs">
@@ -256,7 +273,7 @@ export function TransactionsPage() {
                 net >= 0 ? 'text-status-good' : 'text-status-critical'
               }`}
             >
-              {formatCurrency(net)}
+              {formatCurrency(net, currency)}
             </span>
           </div>
         </div>
@@ -329,6 +346,7 @@ export function TransactionsPage() {
         <TransactionFormModal
           transaction={editing === 'new' ? undefined : editing}
           accounts={accounts}
+          currency={currency}
           categories={categories}
           onCategoriesChanged={categoriesQuery.reload}
           onClose={() => setEditing(null)}
@@ -342,6 +360,7 @@ export function TransactionsPage() {
       {transferring && (
         <TransferFormModal
           accounts={accounts}
+          currency={currency}
           onClose={() => setTransferring(false)}
           onSaved={(savedDate) => {
             setTransferring(false)

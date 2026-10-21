@@ -5,12 +5,14 @@ import { useSubmit } from '../../hooks/useSubmit'
 import { send } from '../../lib/api'
 import { formatCurrency, formatMonth, formatPercent, todayISO } from '../../lib/format'
 import { INSTALLMENT_OPTIONS } from '../../lib/labels'
-import type { Account, Category, MovementTemplate, Transaction, TransactionType } from '../../types'
+import type { Account, Category, Currency, MovementTemplate, Transaction, TransactionType } from '../../types'
 import { Button, Field, FormError, inputClass, Modal, ModalActions } from '../ui'
 
 interface Props {
   transaction?: Transaction
+  /** Cuentas de una sola moneda: la de `currency`. */
   accounts: Account[]
+  currency?: Currency
   categories: Category[]
   onCategoriesChanged: () => void
   onClose: () => void
@@ -21,6 +23,7 @@ interface Props {
 export function TransactionFormModal({
   transaction,
   accounts,
+  currency = 'COP',
   categories,
   onCategoriesChanged,
   onClose,
@@ -39,8 +42,9 @@ export function TransactionFormModal({
   const createCategory = useSubmit()
 
   // Plantillas de movimientos frecuentes (transporte, mercado...).
+  // Cada moneda ve sus plantillas; las que no tienen cuenta se consideran en pesos.
   const templatesQuery = useApi<MovementTemplate[]>('/templates')
-  const templates = templatesQuery.data ?? []
+  const templates = (templatesQuery.data ?? []).filter((t) => (t.account?.currency ?? 'COP') === currency)
   const [activeTemplate, setActiveTemplate] = useState<MovementTemplate | null>(null)
   const [templateName, setTemplateName] = useState<string | null>(null) // null = formulario oculto
   const templateAction = useSubmit()
@@ -179,7 +183,7 @@ export function TransactionFormModal({
                       className="rounded-l-full py-1 pr-1.5 pl-3 hover:text-ink"
                     >
                       {template.name}
-                      {template.amount ? ` · ${formatCurrency(Number(template.amount))}` : ''}
+                      {template.amount ? ` · ${formatCurrency(Number(template.amount), currency)}` : ''}
                     </button>
                     <button
                       type="button"
@@ -214,7 +218,7 @@ export function TransactionFormModal({
           ))}
         </div>
 
-        <Field label="Monto">
+        <Field label={currency === 'USD' ? 'Monto (US$)' : 'Monto'}>
           <input
             required
             type="number"

@@ -1,14 +1,26 @@
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CreditCard, PiggyBank, type LucideIcon } from 'lucide-react'
+import {
+  ArrowDownLeft,
+  ArrowLeftRight,
+  ArrowUpRight,
+  Banknote,
+  CreditCard,
+  PiggyBank,
+  type LucideIcon,
+} from 'lucide-react'
+import { formatCurrency } from '../../lib/format'
+import type { Currency } from '../../types'
 
 interface MovementLike {
   type: 'income' | 'expense'
   transfer_id: string | null
   description: string | null
-  account: { name: string; type?: string } | null
+  account: { name: string; type?: string; currency?: Currency } | null
   category: { name: string } | null
   savings_goal: { name: string } | null
   counterpart_account?: { name: string } | null
   installments?: number
+  /** Cambio de divisas: pesos por dólar. */
+  exchange_rate?: number | null
 }
 
 export interface MovementDisplay {
@@ -16,7 +28,7 @@ export interface MovementDisplay {
   title: string
   /** Origen → destino para transferencias; cuenta · categoría para el resto. */
   detail: string
-  /** "Ahorro" / "Transferencia"; null para ingresos y gastos normales. */
+  /** "Ahorro" / "Transferencia" / "Cambio de divisas"; null para ingresos y gastos normales. */
   tag: string | null
 }
 
@@ -50,6 +62,18 @@ export function describeMovement(tx: MovementLike): MovementDisplay {
       title: tx.description ?? (isOut ? 'Abono a ahorro' : 'Retiro de ahorro'),
       detail: isOut ? `${account} → ${goal}` : `${goal} → ${account}`,
       tag: 'Ahorro',
+    }
+  }
+
+  // Compra o venta de dólares: una pata en pesos y otra en dólares.
+  if (tx.exchange_rate) {
+    const other = tx.counterpart_account?.name
+    const route = other ? (isOut ? `${account} → ${other}` : `${other} → ${account}`) : account
+    return {
+      icon: Banknote,
+      title: tx.description ?? 'Cambio de divisas',
+      detail: `${route} · ${formatCurrency(Number(tx.exchange_rate))} por dólar`,
+      tag: 'Cambio de divisas',
     }
   }
 

@@ -1,16 +1,18 @@
-import { ArrowLeftRight, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeftRight, ArrowRight, DollarSign, Plus } from 'lucide-react'
 import { useState } from 'react'
+import { Link, useNavigate } from 'react-router'
 import { AccountFormModal } from '../components/accounts/AccountFormModal'
+import { AccountList } from '../components/accounts/AccountList'
 import { StatCard } from '../components/dashboard/StatCard'
 import { EmptyState } from '../components/EmptyState'
 import { Spinner } from '../components/Spinner'
 import { TransferFormModal } from '../components/transactions/TransferFormModal'
-import { Button, Card, ErrorBanner, IconButton, PageHeader } from '../components/ui'
+import { Button, ErrorBanner, FormError, PageHeader } from '../components/ui'
+import { useAuth } from '../context/AuthContext'
 import { useApi } from '../hooks/useApi'
 import { useSubmit } from '../hooks/useSubmit'
 import { send } from '../lib/api'
 import { formatCurrency } from '../lib/format'
-import { ACCOUNT_TYPES } from '../lib/labels'
 import type { Account } from '../types'
 
 export function AccountsPage() {
@@ -106,6 +108,8 @@ export function AccountsPage() {
         </>
       )}
 
+      <UsdSectionCard />
+
       {editing && (
         <AccountFormModal
           account={editing === 'new' ? undefined : editing}
@@ -131,83 +135,53 @@ export function AccountsPage() {
   )
 }
 
-interface AccountListProps {
-  title: string
-  subtitle?: string
-  accounts: Account[]
-  onEdit: (account: Account) => void
-  onDelete: (account: Account) => void
-}
+/** Acceso al apartado de dólares: lo activa quien maneja cuentas en USD. */
+function UsdSectionCard() {
+  const { profile, setUsesUsd } = useAuth()
+  const navigate = useNavigate()
+  const activate = useSubmit()
 
-function AccountList({ title, subtitle, accounts, onEdit, onDelete }: AccountListProps) {
+  if (profile?.uses_usd) {
+    return (
+      <Link
+        to="/dolares"
+        className="flex items-center gap-3 rounded-2xl border border-hairline bg-surface p-4 text-sm shadow-xs transition-colors hover:bg-ink/[0.02]"
+      >
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600">
+          <DollarSign className="size-4.5" aria-hidden />
+        </span>
+        <span className="flex-1 text-ink-secondary">
+          Tus cuentas en dólares se llevan aparte, en el apartado <span className="font-semibold text-ink">Dólares</span>.
+        </span>
+        <ArrowRight className="size-4 text-ink-muted" aria-hidden />
+      </Link>
+    )
+  }
+
   return (
-    <Card>
-      <div className="mb-4 flex items-center justify-between border-b border-hairline/60 pb-3">
-        <div>
-          <h2 className="font-bold tracking-tight text-ink">{title}</h2>
-          {subtitle && <p className="text-xs text-ink-muted">{subtitle}</p>}
-        </div>
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-hairline p-4 text-sm">
+      <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600">
+        <DollarSign className="size-4.5" aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-ink">¿Manejas cuentas en dólares?</p>
+        <p className="text-xs text-ink-muted">
+          Activa un apartado para registrarlas en USD, separadas de tus cuentas en pesos. Si no lo usas, no cambia nada.
+        </p>
+        <FormError message={activate.error} />
       </div>
-      <ul className="divide-y divide-hairline">
-        {accounts.map((account) => {
-          const { label, icon: Icon } = ACCOUNT_TYPES[account.type]
-          const balance = Number(account.balance)
-          const isCard = account.type === 'credit_card'
-
-          let iconStyle = 'bg-brand/10 text-brand border-brand/20'
-          if (account.type === 'cash') iconStyle = 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-          if (isCard) iconStyle = 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20'
-
-          return (
-            <li
-              key={account.id}
-              className="group -mx-2 flex items-center gap-3.5 rounded-xl px-2 py-3 transition-colors hover:bg-ink/[0.02]"
-            >
-              <span className={`grid size-10 shrink-0 place-items-center rounded-xl border ${iconStyle} shadow-2xs`}>
-                <Icon className="size-5" aria-hidden />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-ink">{account.name}</p>
-                <p className="text-xs text-ink-muted">{label}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-bold tabular-nums text-ink">
-                  {formatCurrency(isCard ? Math.abs(balance) : balance)}
-                </p>
-                {isCard && (
-                  <span
-                    className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                      balance > 0
-                        ? 'bg-status-good/10 text-status-good'
-                        : balance < 0
-                          ? 'bg-status-critical/10 text-status-critical'
-                          : 'bg-slate-100 text-ink-muted'
-                    }`}
-                  >
-                    {balance > 0 ? 'Saldo a favor' : balance < 0 ? 'Deuda' : 'Al día ($0)'}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100">
-                <IconButton
-                  label={`Editar ${account.name}`}
-                  onClick={() => onEdit(account)}
-                  className="hover:text-brand hover:bg-brand/10"
-                >
-                  <Pencil className="size-4" aria-hidden />
-                </IconButton>
-                <IconButton
-                  label={`Eliminar ${account.name}`}
-                  onClick={() => onDelete(account)}
-                  className="hover:text-status-critical hover:bg-status-critical/10"
-                >
-                  <Trash2 className="size-4" aria-hidden />
-                </IconButton>
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-    </Card>
+      <Button
+        variant="secondary"
+        disabled={activate.submitting}
+        onClick={() =>
+          void activate.run(async () => {
+            await setUsesUsd(true)
+            navigate('/dolares')
+          })
+        }
+      >
+        {activate.submitting ? 'Activando…' : 'Activar dólares'}
+      </Button>
+    </div>
   )
 }

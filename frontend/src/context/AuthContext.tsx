@@ -14,6 +14,8 @@ interface AuthContextValue {
   signUp: (email: string, password: string, fullName: string) => Promise<void>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
+  /** Muestra u oculta el apartado de dólares (las cuentas en USD se conservan). */
+  setUsesUsd: (enabled: boolean) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -54,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     supabase
       .from('users_profiles')
-      .select('id, role, full_name, created_at')
+      .select('id, role, full_name, uses_usd, created_at')
       .eq('id', userId)
       .single()
       .then(({ data, error }) => {
@@ -103,8 +105,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         if (error) throw error
       },
+      async setUsesUsd(enabled) {
+        if (!userId) return
+        const { error } = await supabase.from('users_profiles').update({ uses_usd: enabled }).eq('id', userId)
+        if (error) throw error
+        setProfileState((prev) =>
+          prev?.userId === userId && prev.profile ? { userId, profile: { ...prev.profile, uses_usd: enabled } } : prev,
+        )
+      },
     }),
-    [session, profile, profileReady],
+    [session, profile, profileReady, userId],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
