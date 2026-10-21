@@ -112,8 +112,8 @@ Todas las rutas, salvo `/api/health`, requieren `Authorization: Bearer <access_t
 | POST | `/api/credit-cards/:id/simulate` | Simular meses e intereses para saldar la deuda con una cuota fija |
 | GET | `/api/dashboard/summary?month=YYYY-MM` | Resumen del mes en pesos, gastos por categoría y tendencia de 6 meses |
 | GET | `/api/usd/summary?month=YYYY-MM` | Saldo en dólares, ingresos y gastos del mes en USD, compras/ventas y precio promedio de compra |
-| GET | `/api/admin/metrics` | *(admin)* Métricas globales |
-| GET | `/api/admin/users` | *(admin)* Usuarios con rol |
+| GET | `/api/admin/metrics` | *(admin)* Métricas globales: usuarios activos, cuentas por tipo, tendencia de 6 meses (nuevos usuarios, movimientos y volumen en pesos) y adopción de funciones |
+| GET | `/api/admin/users` | *(admin)* Usuarios con rol, último acceso y cuántas cuentas y movimientos tienen (sin montos) |
 | PATCH | `/api/admin/users/:id/role` | *(admin)* Cambiar rol |
 | DELETE | `/api/admin/users/:id` | *(admin)* Eliminar usuario |
 
@@ -130,4 +130,4 @@ Todas las rutas, salvo `/api/health`, requieren `Authorization: Bearer <access_t
 | `/tarjetas` | Deuda, uso del cupo, próximas fechas de corte y pago, pago desde una cuenta y simulador de pago |
 | `/dolares` | *(si se activó)* Cuentas en dólares, resumen del mes en USD, comprar o vender dólares, transferir y últimos movimientos |
 | `/dolares/movimientos` | *(si se activó)* Movimientos de las cuentas en dólares, con los mismos filtros que Movimientos |
-| `/admin` | *(admin)* Métricas globales y gestión de usuarios (rol y eliminación) |
+| `/admin` | *(admin)* KPIs, gráficas de crecimiento, movimientos y volumen, adopción de funciones y gestión de usuarios (rol, actividad y eliminación) |
