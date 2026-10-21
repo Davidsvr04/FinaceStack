@@ -182,3 +182,27 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
 export function ModalActions({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap justify-end gap-2.5 pt-4 border-t border-hairline mt-4">{children}</div>
 }
+
+interface PanelProps {
+  title: string
+  subtitle?: string
+  action?: ReactNode
+  className?: string
+  children: ReactNode
+}
+
+/** Tarjeta con título, subtítulo y acción opcional para gráficas y listas. */
+export function Panel({ title, subtitle, action, className = '', children }: PanelProps) {
+  return (
+    <section className={`rounded-2xl border border-hairline bg-surface p-5 sm:p-6 shadow-xs ${className}`}>
+      <header className="mb-4 flex items-center justify-between gap-3 border-b border-hairline/60 pb-3">
+        <div>
+          <h2 className="font-bold tracking-tight text-ink">{title}</h2>
+          {subtitle && <p className="text-xs text-ink-muted">{subtitle}</p>}
+        </div>
+        {action && <div>{action}</div>}
+      </header>
+      {children}
+    </section>
+  )
+}

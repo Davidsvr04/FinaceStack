@@ -5,7 +5,7 @@ import {
   Sparkles,
   Wallet,
 } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { DebtMeter } from '../components/dashboard/DebtMeter'
 import { ExpensesByCategoryChart } from '../components/dashboard/ExpensesByCategoryChart'
@@ -14,7 +14,7 @@ import { RecentTransactions } from '../components/dashboard/RecentTransactions'
 import { SavingsGoalsSummary } from '../components/dashboard/SavingsGoalsSummary'
 import { StatCard } from '../components/dashboard/StatCard'
 import { Spinner } from '../components/Spinner'
-import { Button } from '../components/ui'
+import { Button, Panel } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { useApi } from '../hooks/useApi'
 import { currentMonth, formatCurrency, formatMonth, formatPercent } from '../lib/format'
@@ -198,8 +198,8 @@ export function DashboardPage() {
           {/* SECCIÓN 3: GRÁFICOS INTERACTIVOS                      */}
           {/* ===================================================== */}
           <section className="grid gap-5 lg:grid-cols-5">
-            <Panel title="Ingresos, gastos y ahorro" subtitle="Tendencia semestral histórica" className="lg:col-span-3">
-              <IncomeVsExpenseChart data={data.trend} />
+            <Panel title="Ingresos, gastos y ahorro" subtitle="Últimos 6 meses · pasa el cursor para ver el balance" className="lg:col-span-3">
+              <IncomeVsExpenseChart data={data.trend} highlightMonth={month} />
             </Panel>
             <Panel title="Gastos por categoría" subtitle="Distribución en este mes" className="lg:col-span-2">
               <ExpensesByCategoryChart data={data.expenses_by_category} />
@@ -248,28 +248,5 @@ function isEmpty(data: DashboardSummary): boolean {
     data.available_balance === 0 &&
     data.total_debt === 0 &&
     data.total_saved === 0
-  )
-}
-
-interface PanelProps {
-  title: string
-  subtitle?: string
-  action?: ReactNode
-  className?: string
-  children: ReactNode
-}
-
-function Panel({ title, subtitle, action, className = '', children }: PanelProps) {
-  return (
-    <section className={`rounded-2xl border border-hairline bg-surface p-5 sm:p-6 shadow-xs ${className}`}>
-      <header className="mb-4 flex items-center justify-between gap-3 border-b border-hairline/60 pb-3">
-        <div>
-          <h2 className="font-bold tracking-tight text-ink">{title}</h2>
-          {subtitle && <p className="text-xs text-ink-muted">{subtitle}</p>}
-        </div>
-        {action && <div>{action}</div>}
-      </header>
-      {children}
-    </section>
   )
 }

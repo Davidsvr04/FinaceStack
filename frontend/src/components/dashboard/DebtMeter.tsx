@@ -9,6 +9,8 @@ interface Level {
 }
 
 // Umbrales orientativos de deuda total / ingresos del mes.
+const THRESHOLDS = [0.3, 0.5]
+
 function levelFor(ratio: number): Level {
   if (ratio < 0.3) {
     return {
@@ -68,23 +70,41 @@ export function DebtMeter({ ratio, totalDebt }: DebtMeterProps) {
 
       {level && ratio !== null ? (
         <div className="mt-3">
-          <div
-            className="h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50"
-            role="meter"
-            aria-label="Nivel de endeudamiento"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(ratio * 100)}
-          >
+          <div className="relative">
             <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${Math.min(100, ratio * 100)}%`,
-                backgroundColor: level.color,
-              }}
-            />
+              className="h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50"
+              role="meter"
+              aria-label="Nivel de endeudamiento"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(ratio * 100)}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${Math.min(100, ratio * 100)}%`,
+                  backgroundColor: level.color,
+                }}
+              />
+            </div>
+            {/* Umbrales: hasta 30 % saludable, hasta 50 % moderado. */}
+            {THRESHOLDS.map((t) => (
+              <span
+                key={t}
+                className="absolute -top-0.5 h-3 w-0.5 -translate-x-1/2 rounded-full bg-surface ring-1 ring-ink-muted/60"
+                style={{ left: `${t * 100}%` }}
+                aria-hidden
+              />
+            ))}
           </div>
-          <p className="mt-2 text-xs text-ink-muted">
+          <div className="relative mt-1 h-3.5 text-[10px] font-medium text-ink-muted tabular-nums" aria-hidden>
+            {THRESHOLDS.map((t) => (
+              <span key={t} className="absolute -translate-x-1/2" style={{ left: `${t * 100}%` }}>
+                {formatPercent(t)}
+              </span>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-ink-muted">
             Deuda total: <span className="font-semibold text-ink-secondary">{formatCurrency(totalDebt)}</span>
           </p>
         </div>
