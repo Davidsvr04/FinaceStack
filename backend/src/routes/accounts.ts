@@ -1,7 +1,7 @@
 import { createAdminClient } from '@supabase/server/core'
 import { Router } from 'express'
 import { z } from 'zod'
-import { localToday } from '../lib/finance.js'
+import { CURRENCIES, localToday } from '../lib/finance.js'
 import { dbError, getCtx, HttpError, isoDate, parse, uuidParam } from '../lib/http.js'
 
 const router = Router()
@@ -51,6 +51,8 @@ const creditCardFields = {
 const createSchema = z.object({
   name: z.string().trim().min(1).max(80),
   type: z.enum(['bank', 'cash', 'credit_card']),
+  // No se puede cambiar después. Las tarjetas solo pueden ser en pesos.
+  currency: z.enum(CURRENCIES).default('COP'),
   // Saldo inicial. Para tarjetas: deuda actual como número positivo.
   initial_balance: z.coerce.number().default(0),
   ...creditCardFields,
@@ -60,13 +62,17 @@ const updateSchema = z
   .object({ name: z.string().trim().min(1).max(80), ...creditCardFields })
   .partial()
 
+// Por defecto solo las cuentas en pesos: las de dólares se piden aparte.
+const listSchema = z.object({ currency: z.enum([...CURRENCIES, 'all']).default('COP') })
+
 router.get('/', async (req, res) => {
   const { supabase } = getCtx(req)
-  const { data, error } = await supabase
-    .from('accounts')
-    .select('*')
-    .order('created_at', { ascending: true })
+  const { currency } = parse(listSchema, req.query)
 
+  let query = supabase.from('accounts').select('*').order('created_at', { ascending: true })
+  if (currency !== 'all') query = query.eq('currency', currency)
+
+  const { data, error } = await query
   if (error) throw dbError(error)
   res.json(data)
 })
@@ -81,6 +87,9 @@ router.post('/', async (req, res) => {
   )
   if (!isCard && hasCardFields) {
     throw new HttpError(400, 'Los campos de tarjeta solo aplican a cuentas tipo credit_card')
+  }
+  if (isCard && input.currency !== 'COP') {
+    throw new HttpError(400, 'Las tarjetas de crédito solo se manejan en pesos')
   }
   if ((input.opening_billed_debt ?? 0) + (input.opening_next_charge ?? 0) > Math.abs(initial_balance)) {
     throw new HttpError(400, 'Lo facturado más lo del próximo extracto no puede superar la deuda actual')

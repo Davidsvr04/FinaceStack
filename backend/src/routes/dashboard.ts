@@ -36,21 +36,23 @@ router.get('/summary', async (req, res) => {
 
   const [txResult, accountsResult, recentResult, goalsResult] = await Promise.all([
     // Ingresos/gastos reales + movimientos de ahorro (los pagos a tarjeta no
-    // cuentan para nada de esto).
+    // cuentan para nada de esto). Solo pesos: los dólares tienen su apartado.
     supabase
       .from('transactions')
-      .select('type, amount, date, savings_goal_id, category:categories(name)')
+      .select('type, amount, date, savings_goal_id, category:categories(name), account:accounts!inner(currency)')
+      .eq('account.currency', 'COP')
       .gte('date', from)
       .lt('date', to)
       .or('transfer_id.is.null,savings_goal_id.not.is.null')
       .overrideTypes<TxRow[], { merge: false }>(),
-    supabase.from('accounts').select('type, balance, credit_limit'),
+    supabase.from('accounts').select('type, balance, credit_limit').eq('currency', 'COP'),
     // Últimos movimientos, incluidas transferencias y ahorros (una fila cada una).
     supabase
       .from('transactions')
       .select(
-        'id, type, amount, date, description, transfer_id, category:categories(name), account:accounts(name, type), savings_goal:savings_goals(name)',
+        'id, type, amount, date, description, transfer_id, exchange_rate, category:categories(name), account:accounts!inner(name, type, currency), savings_goal:savings_goals(name)',
       )
+      .eq('account.currency', 'COP')
       .or(ONE_ROW_PER_TRANSFER)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })

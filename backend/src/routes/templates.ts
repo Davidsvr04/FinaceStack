@@ -6,7 +6,7 @@ import { dbError, getCtx, HttpError, money, parse, uuidParam } from '../lib/http
 // formulario de nuevo movimiento; la fecha siempre es la del día en que se usan.
 const router = Router()
 
-const SELECT = '*, account:accounts(id, name, type), category:categories(id, name, type)'
+const SELECT = '*, account:accounts(id, name, type, currency), category:categories(id, name, type)'
 
 const templateSchema = z.object({
   name: z.string().trim().min(1).max(60),

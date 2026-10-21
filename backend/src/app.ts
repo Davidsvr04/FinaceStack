@@ -11,6 +11,7 @@ import dashboard from './routes/dashboard.js'
 import savings from './routes/savings.js'
 import templates from './routes/templates.js'
 import transactions from './routes/transactions.js'
+import usd from './routes/usd.js'
 
 // Falla al cargar si falta configuración de Supabase, en lugar de en la primera petición.
 assertSupabaseEnv()
@@ -35,6 +36,7 @@ api.use('/templates', templates)
 api.use('/savings-goals', savings)
 api.use('/credit-cards', creditCards)
 api.use('/dashboard', dashboard)
+api.use('/usd', usd)
 api.use('/admin', requireAdmin, admin)
 
 app.use('/api', api)

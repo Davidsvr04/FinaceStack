@@ -14,8 +14,15 @@ export function localToday(): string {
  * Filtro PostgREST (.or) para listar cada transferencia una sola vez: de las
  * transferencias entre cuentas (pago a tarjeta) se muestra solo la pata de
  * salida; los movimientos de ahorro tienen una sola pata y siempre se ven.
+ * Los cambios de divisas tienen una pata en cada moneda: como las listas se
+ * filtran por moneda (ver CURRENCIES), cada una muestra la suya.
  */
-export const ONE_ROW_PER_TRANSFER = 'transfer_id.is.null,type.eq.expense,savings_goal_id.not.is.null'
+export const ONE_ROW_PER_TRANSFER =
+  'transfer_id.is.null,type.eq.expense,savings_goal_id.not.is.null,exchange_rate.not.is.null'
+
+/** Monedas de las cuentas. COP es la de siempre; USD va en un apartado aparte. */
+export const CURRENCIES = ['COP', 'USD'] as const
+export type Currency = (typeof CURRENCIES)[number]
 
 // ---------------------------------------------------------------------------
 // Fechas como 'YYYY-MM-DD' (sin hora) para evitar desfases de zona horaria.

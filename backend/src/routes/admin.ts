@@ -24,9 +24,11 @@ router.get('/metrics', async (_req, res) => {
     admin.from('accounts').select('*', { count: 'exact', head: true }),
     admin.from('transactions').select('*', { count: 'exact', head: true }),
     // Para volúmenes grandes conviene mover esta suma a una función SQL.
+    // Solo pesos, para no mezclar monedas en el total.
     admin
       .from('transactions')
-      .select('type, amount')
+      .select('type, amount, account:accounts!inner(currency)')
+      .eq('account.currency', 'COP')
       .gte('date', monthStart(month))
       .lt('date', monthStart(month, 1))
       .is('transfer_id', null),
