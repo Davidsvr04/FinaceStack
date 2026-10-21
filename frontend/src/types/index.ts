@@ -216,15 +216,39 @@ export interface GoalSummary {
   progress: number
 }
 
+export interface AdminTrendPoint {
+  month: string
+  /** Volumen en pesos (sin transferencias). */
+  income: number
+  expense: number
+  /** Movimientos registrados (una transferencia cuenta una vez). */
+  movements: number
+  new_users: number
+}
+
 export interface AdminMetrics {
   total_users: number
   total_admins: number
   new_users_30d: number
+  /** Iniciaron sesión en los últimos 30 días. */
+  active_users_30d: number
   total_accounts: number
+  /** bank/cash/credit_card en pesos; usd = cuentas en dólares. */
+  accounts_by_type: { bank: number; cash: number; credit_card: number; usd: number }
   total_transactions: number
+  movements_this_month: number
   month: string
   platform_income: number
   platform_expense: number
+  trend: AdminTrendPoint[]
+  /** Usuarios que usan cada función. */
+  adoption: {
+    with_accounts: number
+    with_cards: number
+    with_goals: number
+    with_templates: number
+    with_usd: number
+  }
 }
 
 export interface AdminUser {
@@ -232,6 +256,9 @@ export interface AdminUser {
   email: string | null
   full_name: string | null
   role: Role
+  uses_usd: boolean
+  accounts_count: number
+  movements_count: number
   last_sign_in_at: string | null
   created_at: string
 }

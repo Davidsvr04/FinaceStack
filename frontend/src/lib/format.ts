@@ -51,6 +51,24 @@ export function shiftMonth(month: string, delta: number): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
+const relative = new Intl.RelativeTimeFormat(LOCALE, { numeric: 'auto' })
+
+/** "hace 3 días", "ayer", "hace 2 horas". */
+export function formatRelative(iso: string): string {
+  const seconds = (new Date(iso).getTime() - Date.now()) / 1000
+  const units: [Intl.RelativeTimeFormatUnit, number][] = [
+    ['year', 31_536_000],
+    ['month', 2_592_000],
+    ['day', 86_400],
+    ['hour', 3_600],
+    ['minute', 60],
+  ]
+  for (const [unit, size] of units) {
+    if (Math.abs(seconds) >= size) return relative.format(Math.round(seconds / size), unit)
+  }
+  return 'hace un momento'
+}
+
 export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString(LOCALE, { dateStyle: 'medium', timeStyle: 'short' })
 }
