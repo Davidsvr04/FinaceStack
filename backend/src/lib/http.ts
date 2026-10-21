@@ -44,6 +44,24 @@ export function dbError(error: PostgrestError): HttpError {
   return new HttpError(status, message, error.code)
 }
 
+const FETCH_PAGE = 1000
+
+/**
+ * Lee todas las filas de una consulta por páginas: PostgREST corta en 1000
+ * filas sin avisar. `page` arma la consulta (con un orden estable) para un rango.
+ */
+export async function fetchAll<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: PostgrestError | null }>,
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; ; from += FETCH_PAGE) {
+    const { data, error } = await page(from, from + FETCH_PAGE - 1)
+    if (error) throw dbError(error)
+    rows.push(...(data ?? []))
+    if (!data || data.length < FETCH_PAGE) return rows
+  }
+}
+
 export const uuidParam = z.object({ id: z.uuid() })
 export const isoDate = z.iso.date()
 export const money = z.coerce.number().positive().multipleOf(0.01)
